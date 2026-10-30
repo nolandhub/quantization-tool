@@ -1,11 +1,11 @@
 # qtool — Design Spec
 
-Ngày: 2026-10-30 · Trạng thái: chờ Nhân duyệt · Repo: `~/ws-DoNhan/qtool` (local) · máy phát triển và kiểm chứng: `rtx4070:~/qtool` (RTX 4070 Ti SUPER, SM 8.9)
+Ngày: 2026-10-30 · Trạng thái: bản 2 (cập nhật theo spike, `docs/spike/2026-10-30-findings.md`), chờ Nhân duyệt · Repo: `~/ws-DoNhan/qtool` (local) · máy phát triển và kiểm chứng: `rtx4070:~/qtool` (RTX 4070 Ti SUPER, SM 8.9)
 
 ## 1. Mục tiêu
 
 CLI đơn giản gói 4 bước quantize theo flow LLM Compressor của vLLM
-(<https://docs.vllm.ai/en/latest/features/quantization/llm_compressor/>):
+([https://docs.vllm.ai/en/latest/features/quantization/llm_compressor/](https://docs.vllm.ai/en/latest/features/quantization/llm_compressor/)):
 
 1. Loading the model
 2. Preparing calibration data
@@ -15,7 +15,7 @@ CLI đơn giản gói 4 bước quantize theo flow LLM Compressor của vLLM
 Dev chỉ cần chỉ tên model và scheme. Console log bằng tiếng Anh, từng bước in rõ đang làm gì,
 tiến trình tới đâu, mất bao lâu. **Parse, không tự chế:** mọi tiến trình và số liệu hiển thị lấy
 từ output thật của llmcompressor / vLLM / lm_eval hoặc từ file (config.json, results.json);
-tool chỉ tự đo thời gian và tự tính Δ pp, recovery % từ các số đã parse.
+tool chỉ tự đo thời gian và tự tính Δ pp, recovery %, ETA (ghi rõ `est.`) từ các số đã parse.
 
 Lý do phải tự làm: vLLM/LLM Compressor chỉ cung cấp từng mảnh — `llmcompressor.oneshot()`
 (Python API, không có CLI quantize; console script duy nhất là `llmcompressor.trace` và
@@ -28,6 +28,10 @@ llmcompressor), cờ runtime `VLLM_MARLIN_INPUT_DTYPE` của vLLM. qtool là l�
 
 - 2 lệnh con: `qtool quantize`, `qtool eval`.
 - 5 scheme (bảng mục 3), chỉ sinh scheme được yêu cầu.
+- Họ model: recipe phụ thuộc kiến trúc (lớp load, ignore list, layer tuần tự, MTP) nên tool giữ bảng
+  "model family" theo `architectures` trong `config.json`. Bản đầu: **Qwen3.5** (`Qwen3_5ForConditionalGeneration`,
+  đã kiểm chứng 4B và 9B). Kiến trúc chưa có trong bảng → `quantize` exit 2 kèm danh sách họ hỗ trợ;
+  `qtool eval` không bị giới hạn (vLLM đọc được là chạy).
 - Phần cứng: GPU NVIDIA bất kỳ có Docker + NVIDIA Container Toolkit; 1 GPU mỗi lượt chạy, chọn bằng
   `--gpu` (bắt buộc khi máy có ≥ 2 GPU). Scheme nào eval được trên GPU nào: bảng mục 3.
 - Eval bằng `lm_eval --model vllm`, task bất kỳ của lm_eval, mặc định `gsm8k`.
@@ -41,6 +45,8 @@ llmcompressor), cờ runtime `VLLM_MARLIN_INPUT_DTYPE` của vLLM. qtool là l�
 - Không eval trên SM 7.0 (V100): vLLM 0.28 bỏ SM 7.0, vLLM 0.18 (bản cuối có SM 7.0) không biết
   Qwen3.5. V100 chỉ quantize (`--no-eval`), eval ở máy khác.
 - Không kiểm định thống kê (McNemar, p-value). Theo cách làm gốc: bảng lm_eval có stderr + recovery %.
+- Không cài `flash-linear-attention` (transformers log `fast path is not available` → calib lớp GDN chạy torch thuần;
+  có thể nhanh hơn nhưng chưa thử, ghi vào hướng mở rộng).
 
 ### Hướng mở rộng (ghi lại, chưa làm)
 
@@ -48,24 +54,42 @@ llmcompressor), cờ runtime `VLLM_MARLIN_INPUT_DTYPE` của vLLM. qtool là l�
 - Tập calib tiếng Việt hoặc trộn (`--calib-mix`).
 - Recipe `FP8_DYNAMIC` lưu checkpoint.
 - Multi-GPU (tensor parallel) cho model không vừa 1 GPU.
+- Thêm họ model (Llama, Qwen3 dense, …) vào bảng model family.
+- `flash-linear-attention` trong image compress để rút thời gian calib Qwen3.5.
 
 ## 3. Scheme
 
-| `--scheme` | Weight | Activation | Checkpoint | Eval runtime |
-|---|---|---|---|---|
-| `int4-w4a16` | INT4 sym g128 | BF16 | build `INT4-W4A16`: `GPTQModifier(targets="Linear", scheme="W4A16")` | mặc định |
-| `int4-w4a8-fp8` | INT4 | FP8 | dùng chung `INT4-W4A16` | `VLLM_MARLIN_INPUT_DTYPE=fp8` |
-| `int4-w4a8-int8` | INT4 | INT8 | dùng chung `INT4-W4A16` | `VLLM_MARLIN_INPUT_DTYPE=int8` — experimental, chưa kiểm chứng |
-| `int8-w8a8` | INT8 | INT8 | build `INT8-W8A8`: `SmoothQuantModifier(smoothing_strength=0.8)` + `GPTQModifier(targets="Linear", scheme="W8A8")` | mặc định |
-| `fp8-w8a8` | FP8 | FP8 | không có | model BF16 gốc + `--quantization fp8` (vLLM quantize online) |
+| `--scheme`       | Weight        | Activation | Checkpoint                                                                                                               | Eval runtime                                                         |
+| ------------------ | ------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| `int4-w4a16`     | INT4 sym g128 | BF16       | build `INT4-W4A16`: `GPTQModifier(targets="Linear", scheme="W4A16")`                                                 | mặc định                                                          |
+| `int4-w4a8-fp8`  | INT4          | FP8        | dùng chung `INT4-W4A16`                                                                                               | `VLLM_MARLIN_INPUT_DTYPE=fp8`                                      |
+| `int4-w4a8-int8` | INT4          | INT8       | dùng chung `INT4-W4A16`                                                                                               | `VLLM_MARLIN_INPUT_DTYPE=int8`                                     |
+| `int8-w8a8`      | INT8          | INT8       | build `INT8-W8A8`: `SmoothQuantModifier(smoothing_strength=0.8)` + `GPTQModifier(targets="Linear", scheme="W8A8")` | mặc định                                                          |
+| `fp8-w8a8`       | FP8           | FP8        | không có                                                                                                               | model BF16 gốc + `--quantization fp8` (vLLM quantize online)      |
 
 Ghi chú:
 
 - W4A8 trên Ada = checkpoint INT4 đối xứng g128 + Marlin lượng tử hoá activation động lúc chạy
   (đã kiểm chứng trong bake-off 26/10, `qwen-bench/docs/handoff-2026-10-27.md`). Checkpoint gắn
   nhãn `CompressedTensorsW4A8Fp8` đòi SM 9.0 nên không dùng.
-- Ignore list mỗi recipe: `lm_head` + các layer xác định từ spike (mục 10). Không đoán.
 - Quantize luôn đi từ model gốc chưa quantize.
+- `int4-w4a8-int8` đã chạy thật trên SM 8.9 (spike Q5: gsm8k limit 50 → 0.80) → không còn nhãn experimental.
+
+### Model family (bản đầu: Qwen3.5)
+
+Lấy từ checkpoint RedHat + spike Q1/Q2; áp cho mọi scheme có checkpoint:
+
+| Mục | Qwen3.5 |
+|---|---|
+| Nhận diện | `architectures == ["Qwen3_5ForConditionalGeneration"]` |
+| Lớp load | `Qwen3_5ForConditionalGeneration` (kèm vision encoder) |
+| dtype gốc | `text_config.dtype` khi cấp trên cùng không có `dtype` |
+| Ignore | `re:.*lm_head`, `re:.*embed_tokens$`, `re:.*visual.*`, `re:.*model.visual.*`, `re:.*linear_attn.*` (GDN giữ BF16) |
+| Layer tuần tự | `oneshot(..., sequential_targets=["Qwen3_5DecoderLayer"])` (truyền vào `oneshot`, **không** vào `GPTQModifier`) |
+| SmoothQuant | mapping tự suy (đã kiểm: `Smoothing with input_layernorm / post_attention_layernorm`) |
+| Sau khi lưu | `save_mtp_tensors_to_checkpoint(source_model, dest_dir)` — `save_pretrained` không giữ MTP |
+
+Được quantize: `mlp.{gate,up,down}_proj` mọi layer + `self_attn.*` ở 8 layer full attention.
 
 ### Phần cứng
 
@@ -76,24 +100,27 @@ Nguyên tắc:
   (INT4 / INT8 / FP8) chỉ là phép làm tròn, không cần phần cứng hỗ trợ. Tensor core BF16 (SM ≥ 8.0)
   chỉ giúp nhanh hơn; không có thì tính FP32 trên CUDA core (chậm hơn, tốn gấp đôi bộ nhớ).
   Không bao giờ tự chọn FP16 (model train BF16 có thể tràn FP16 → calib sai ngầm).
+  Compute FP32 → trước khi lưu cast phần không quantize về dtype gốc (spike Q6: không cast thì checkpoint
+  lưu FP32, 9.3 GB thay vì 5.2 GB; vLLM vẫn tự `Downcasting torch.float32 to torch.bfloat16`).
+  Đã chạy thật trên V100: 4B W4A16 FP32 mất 2 giờ 40 phút (4070 BF16: 15 phút), eval trên rtx4070 0.80.
 - **Eval (step 4) cần kernel vLLM cho đúng định dạng** → giới hạn theo SM (bảng dưới).
 - **So với baseline** chỉ hợp lệ khi cùng GPU, cùng image eval, cùng task / limit / số shot (mục 6, quy tắc cache).
 
 Bảng khả năng eval theo compute capability. ✓ = native, ⚠ = chạy nhưng khác bản chất (cảnh báo),
-✗ = không chạy (preflight chặn). Chỉ cột SM 8.9 đã kiểm chứng trên phần cứng thật (rtx4070); các cột
-khác theo docs vLLM + code vLLM 0.28 → tool in nhãn `[per vLLM docs, unverified]`.
+✗ = không chạy (preflight chặn). Đã kiểm chứng trên phần cứng thật: cột SM 8.9 (rtx4070) và ô quantize
+SM 7.0 (V100, spike Q6). Các ô khác theo docs vLLM + code vLLM 0.28 → tool in nhãn `[per vLLM docs, unverified]`.
 
-| Scheme \ SM | 7.0 (V100) | 7.5 (T4, 20xx) | 8.0 / 8.6 (A100, 30xx) | **8.9 (L4, 40xx)** | 9.0 (H100) | 10.0 (B200) | 12.0 (50xx) |
-|---|---|---|---|---|---|---|---|
-| `int4-w4a16` | ✗ | ✗ (docs: INT4 cần > 8.0) | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `int4-w4a8-*` | ✗ | ✗ | ✗ | ✓ | ✗ (Marlin W4A8 chậm hơn W4A16) | ✗ | ✓ |
-| `int8-w8a8` | ✗ | ✓ | ✓ | ✓ | ✓ | ✗ (docs: không INT8 ≥ 10.0) | ✗ |
-| `fp8-w8a8` | ✗ | ✗ | ⚠ chạy dạng W8A16 weight-only (Marlin) | ✓ | ✓ | ✓ | ✓ |
-| baseline BF16 | ✗ | ⚠ vLLM ép FP16 | ✓ | ✓ | ✓ | ✓ | ✓ |
-| quantize (step 1–3) | ⚠ FP32, chậm | ⚠ FP32, chậm | ✓ BF16 | ✓ BF16 | ✓ BF16 | ✓ BF16 | ✓ BF16 |
+| Scheme \ SM          | 7.0 (V100)     | 7.5 (T4, 20xx)             | 8.0 / 8.6 (A100, 30xx)                    | **8.9 (L4, 40xx)** | 9.0 (H100)                        | 10.0 (B200)                    | 12.0 (50xx) |
+| -------------------- | -------------- | -------------------------- | ----------------------------------------- | ------------------------ | --------------------------------- | ------------------------------ | ----------- |
+| `int4-w4a16`       | ✗             | ✗ (docs: INT4 cần > 8.0) | ✓                                        | ✓                       | ✓                                | ✓                             | ✓          |
+| `int4-w4a8-*`      | ✗             | ✗                         | ✗                                        | ✓                       | ✗ (Marlin W4A8 chậm hơn W4A16) | ✗                             | ✓          |
+| `int8-w8a8`        | ✗             | ✓                         | ✓                                        | ✓                       | ✓                                | ✗ (docs: không INT8 ≥ 10.0) | ✗          |
+| `fp8-w8a8`         | ✗             | ✗                         | ⚠ chạy dạng W8A16 weight-only (Marlin) | ✓                       | ✓                                | ✓                             | ✓          |
+| baseline BF16        | ✗             | ⚠ vLLM ép FP16           | ✓                                        | ✓                       | ✓                                | ✓                             | ✓          |
+| quantize (step 1–3) | ⚠ FP32, chậm | ⚠ FP32, chậm             | ✓ BF16                                   | ✓ BF16                  | ✓ BF16                           | ✓ BF16                        | ✓ BF16     |
 
-Hàng `baseline BF16` ở SM 7.5 và mọi ô SM 7.5 / 7.0 cần xác nhận lại trong spike hoặc khi có máy
-(vLLM 0.28 có còn build SM 7.5 không).
+Spike Q7: kernel vLLM 0.28 có ELF `sm_75 … sm_120a`, không có `sm_70` → cột SM 7.0 ✗ cho mọi eval là đúng;
+cột SM 7.5 có kernel nhưng chưa chạy thật (không có máy) → giữ nhãn unverified.
 
 ## 4. CLI
 
@@ -147,12 +174,12 @@ hoặc model BF16 gốc.
 
 ### Exit code
 
-| Code | Nghĩa |
-|---|---|
-| 0 | mọi scheme OK |
-| 1 | ≥ 1 scheme FAILED (`--on-error continue`) |
-| 2 | lỗi tham số / preflight, chưa chạy gì |
-| 130 | Ctrl-C |
+| Code | Nghĩa                                       |
+| ---- | -------------------------------------------- |
+| 0    | mọi scheme OK                               |
+| 1    | ≥ 1 scheme FAILED (`--on-error continue`) |
+| 2    | lỗi tham số / preflight, chưa chạy gì   |
+| 130  | Ctrl-C                                       |
 
 ## 5. Kiến trúc
 
@@ -162,16 +189,32 @@ văn vào file log, parse, in dòng đã lọc ra console.
 
 ```
 qtool (host)
-  ├─ docker run qtool-compress  → step 1–3 (transformers + llmcompressor, phiên bản ghim từ spike)
-  └─ docker run qtool-eval      → step 4 (FROM vllm/vllm-openai:v0.28.0-cu129-ubuntu2404 + lm-eval[api], ghim)
+  ├─ docker run qtool-compress:cu129 | :cu126  → step 1–3 (transformers + llmcompressor)
+  └─ docker run qtool-eval                     → step 4 (vLLM 0.28 + lm-eval)
 ```
 
 Lý do 2 image: docs vLLM khuyên tách môi trường llmcompressor và vLLM; dùng đúng image vLLM 0.28
 của bake-off để số eval so được với số cũ.
 
-GPU: `docker run --gpus device=N` → container chỉ thấy đúng 1 GPU đã chọn (không thể bị rải sang
-card khác). Mount: `--hf-cache` vào cả 2 container; `HF_TOKEN` truyền qua nếu có.
-Image compress phải có torch build kèm SM 7.0 (CUDA 12.x; CUDA 13 bỏ Volta) để quantize được trên V100.
+Phiên bản ghim (spike Q1, Q6):
+
+| Image | Base | Ghim |
+|---|---|---|
+| `qtool-compress:cu129` | `python:3.11-slim` + `gcc libc6-dev` (Triton cần C compiler) | torch 2.13.0 (index cu129, arch sm_75–sm_120), llmcompressor 0.13.0, transformers 5.14.1, datasets |
+| `qtool-compress:cu126` | như trên | torch 2.13.0 (index cu126, arch sm_50–sm_90, **có sm_70**) |
+| `qtool-eval` | `vllm/vllm-openai:v0.28.0-cu129-ubuntu2404`, `ENTRYPOINT []` | `lm-eval[api]==0.4.13` cài với constraint `torch|vllm|transformers|compressed-tensors` lấy từ `pip freeze` của image + `huggingface-hub<2.0` |
+
+- Chọn image compress theo SM: SM < 7.5 → `cu126`; còn lại → `cu129`. SM ≥ 10.0 chỉ có ở `cu129`.
+- Không lên llmcompressor 0.15: kéo torch 2.14 cu130 (bỏ sm_70) và transformers ≥ 5.15. llmcompressor ≤ 0.11 chưa biết Qwen3.5.
+- Checkpoint compressed-tensors 0.18.0 (image compress) load được bằng compressed-tensors 0.17.0 (image eval) — spike Q1.
+
+Container:
+
+- GPU: `docker run --gpus device=N` → container chỉ thấy đúng 1 GPU đã chọn (không thể bị rải sang card khác).
+- Mount: `--hf-cache` và thư mục runs vào cả 2 container; `HF_TOKEN` truyền qua nếu có.
+- `--user $(id -u):$(id -g)` → file checkpoint thuộc dev (spike: container ghi bằng root, safetensors mode 600, dev không đọc được).
+- Container compress chạy với `--memory` = RAM khả dụng lúc preflight − 2 GB: quantize vượt RAM thì container bị kill
+  (exit 137, báo lỗi rõ), không kéo sập service khác trên host (spike: FP32 4B bị kill ở trần 24 GB).
 
 ### Cấu trúc repo
 
@@ -180,6 +223,7 @@ qtool/
 ├── qtool/
 │   ├── cli.py          argparse, validate tham số
 │   ├── schemes.py      bảng scheme: recipe, checkpoint dùng chung, env/args eval
+│   ├── families.py     bảng model family: nhận diện theo architectures, ignore, layer tuần tự, MTP
 │   ├── plan.py         lập kế hoạch, gộp checkpoint, kiểm tra cache
 │   ├── preflight.py    parse nvidia-smi / docker info / df, kiểm tra điều kiện
 │   ├── runner.py       docker run, stream dòng, log file, Ctrl-C, thư mục tạm
@@ -198,14 +242,31 @@ qtool/
 
 ### Nguồn thông tin hiển thị
 
-| Loại | Cách lấy |
-|---|---|
-| Sự kiện của thư viện (tqdm llmcompressor, dòng GPTQ, dòng kernel vLLM, tiến trình lm_eval) | regex trên output gốc; regex viết từ fixture log thật của spike |
-| Sự kiện script mình đọc trong container (config.json, thống kê token calib, dung lượng checkpoint, VRAM đỉnh) | `quantize.py` in dòng `@qtool {json}`, host parse JSON |
-| Kết quả eval | `results.json` + file sample của lm_eval |
-| Thời gian, Δ pp, recovery % | host tự đo / tự tính từ số đã parse |
+| Loại                                                                                                                    | Cách lấy                                                            |
+| ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| Sự kiện của thư viện (tqdm llmcompressor, dòng GPTQ, dòng kernel vLLM, tiến trình lm_eval)                      | regex trên output gốc; regex viết từ fixture log thật của spike |
+| Sự kiện script mình đọc trong container (config.json, thống kê token calib, dung lượng checkpoint, VRAM đỉnh) | `quantize.py` in dòng `@qtool {json}`, host parse JSON           |
+| Kết quả eval                                                                                                           | `results.json` + file sample của lm_eval                           |
+| Thời gian, Δ pp, recovery %                                                                                            | host tự đo / tự tính từ số đã parse                           |
 
 Không tìm thấy dòng mong đợi → in `unknown (not found in <nguồn>)`, không bao giờ đoán.
+
+Dòng log thật cần parse (từ fixture spike, `tests/fixtures/`):
+
+| Nguồn | Dòng | Dùng cho |
+|---|---|---|
+| llmcompressor (tqdm, có `\r`) | `(N/33): Calibrating: x/512`, `(N/33): Propagating` | tiến trình subgraph, ETA |
+| llmcompressor (loguru) | `\| compress_module_list \| INFO - Quantizing <module> using 512 samples` | module đang quantize |
+| llmcompressor (loguru) | `\| GPTQ \| METRIC - time 1.07s`, `METRIC - error 1152.89` | thời gian / lỗi GPTQ mỗi module |
+| llmcompressor (loguru) | `_apply_smoothing \| INFO - Smoothing with <norm>` | tiến trình SmoothQuant |
+| vLLM | `Using MarlinLinearKernel for CompressedTensorsWNA16` / `Selected CutlassInt8ScaledMMLinearKernel for CompressedTensorsW8A8Int8` | kernel (2 dạng: `Using X for Y`, `Selected X for Y`) |
+| vLLM | `Model loading took 5.11 GiB memory and 11.19 seconds`, `GPU KV cache size: 104,448 tokens` | bộ nhớ model, KV |
+| vLLM | `Downcasting torch.float32 to torch.bfloat16.` | checkpoint lưu FP32 |
+| vLLM | `max_num_seqs (256) exceeds available Mamba cache blocks (124)` | lỗi cấu hình hybrid, trích nguyên văn |
+| lm_eval | `Processed prompts: …/50`, bảng `\|Tasks\|Version\|Filter\|…` | tiến trình, bảng in lại |
+
+Log vLLM **không phân biệt W4A16 với W4A8** (spike Q4) → bằng chứng W4A8 là env truyền vào container + dòng `MarlinLinearKernel`.
+nvidia-smi `--query-compute-apps` chỉ cho `process_name=python` → preflight map PID → container qua `/proc/<pid>/cgroup` (id container) + `docker ps`; không map được → in PID trần.
 
 ## 6. Luồng chạy
 
@@ -218,10 +279,39 @@ Không tìm thấy dòng mong đợi → in `unknown (not found in <nguồn>)`, 
 5. Mỗi checkpoint cần build → 1 container compress:
    - `[1/4]` đọc `config.json` (chặn model đã quantize **trước khi** load weight), load model.
    - `[2/4]` tập calib: lần đầu tải + áp chat template + tokenize + lưu `runs/<model>/calib/`; lần sau `reused from cache`.
-   - `[3/4]` `oneshot` → ghi `checkpoints/.tmp-<NAME>/` → thành công mới rename thành `checkpoints/<NAME>/` kèm `qtool.json`.
+   - `[3/4]` `oneshot` → (compute FP32: cast về dtype gốc) → `save_pretrained(save_compressed=True)` + processor + MTP
+     vào `checkpoints/.tmp-<NAME>/` → thành công mới rename thành `checkpoints/<NAME>/` kèm `qtool.json`.
    - `oneshot` sửa model tại chỗ nên mỗi checkpoint load lại model gốc.
 6. Trừ khi `--no-eval`: `[4/4]` baseline BF16 (bỏ qua nếu cache hợp lệ) → từng scheme, mỗi lần 1 container eval.
 7. Bảng tổng hợp + `summary.json`.
+
+### Cấu hình eval (ghim theo spike Q4)
+
+```
+lm_eval --model vllm \
+  --model_args pretrained=<model>,max_model_len=4096,gpu_memory_utilization=0.85,max_num_seqs=64,enable_thinking=False[,quantization=fp8] \
+  --tasks <tasks> --num_fewshot <mặc định của task> [--limit N] \
+  --apply_chat_template --fewshot_as_multiturn --batch_size auto --output_path <tmp> --log_samples
+```
+
+- **Chế độ chat, tắt thinking** — lệch khỏi docs vLLM (completion, `add_bos_token=True`). Lý do: Qwen3.5 là model chat;
+  BF16 gsm8k limit 50 ra 0.82 ở chế độ chat, 0.70 ở chế độ docs. Không truyền `add_bos_token` (Qwen không có BOS token).
+- `max_num_seqs=64` bắt buộc với model hybrid (Mamba/GDN): mặc định 256 vượt số Mamba cache block → vLLM từ chối khởi động.
+- Khởi tạo vLLM mất ~4.5 phút **mỗi lượt eval** (load + compile + CUDA graph) → console in dòng chờ có thời gian trôi qua
+  để dev biết tool không treo.
+
+### Thời gian tham khảo (spike, rtx4070 trừ khi ghi khác)
+
+| Việc | Thời gian |
+|---|---|
+| Quantize 4B W4A16 BF16 | ~15 phút (oneshot 906 s) |
+| Quantize 4B W8A8 BF16 | ~24 phút (SmoothQuant ~9 + GPTQ ~15) |
+| Quantize 9B W4A16 BF16 | ~22 phút |
+| Quantize 4B W4A16 FP32 trên V100 | ~2 giờ 40 phút (10.6× 4070; forward FP32 chậm 12.5×, GPTQ 4.6×) |
+| Eval gsm8k limit 50 | ~4.5 phút (gần hết là khởi tạo vLLM) |
+| Eval gsm8k full (1319 câu) | ~11 phút (ước) |
+
+ETA trong lúc quantize: tool tính từ `(N/33)` đã parse và thời gian đã trôi, in kèm nhãn `est.`.
 
 ### `qtool eval`
 
@@ -259,55 +349,58 @@ Phát hiện sớm nhất có thể; thông báo luôn trích dòng lỗi gốc 
 
 ### A. Preflight — exit 2, chưa chạy gì
 
-| Tình huống | Phát hiện | Xử lý |
-|---|---|---|
-| Không có Docker / GPU trong container | `docker info`, `nvidia-smi` | báo lỗi |
-| VRAM trống < ngưỡng (tính theo kích thước model × hệ số đo từ spike, nhân đôi khi FP32) | nvidia-smi | liệt kê PID / process / VRAM đang chiếm, dev tự dừng |
-| qtool khác đang chạy | `.lock` | `another qtool run (pid N) is active` |
-| Task lm_eval không tồn tại | hỏi danh sách task trong container eval | `unknown task '<x>'` |
-| `--act` với checkpoint không phải INT4 sym group-wise | `quantization_config` | báo kiểu thực tế |
-| Máy có ≥ 2 GPU mà thiếu `--gpu` | nvidia-smi | in bảng GPU (index, tên, SM, VRAM trống, process đang chiếm) để dev chọn |
-| Scheme ✗ trên SM của GPU (bảng mục 3) | `compute_cap` | báo lỗi + gợi ý scheme thay thế, vd `int8-w8a8 is not supported on SM 10.0. Use fp8-w8a8.` |
-| Scheme ⚠ trên SM của GPU | `compute_cap` | **cảnh báo, vẫn chạy**, vd `fp8-w8a8 on SM 8.6 runs as W8A16 (weight-only)` |
-| SM 7.0 mà không có `--no-eval` | `compute_cap` | báo lỗi: eval không chạy được trên SM 7.0, thêm `--no-eval` rồi `qtool eval` trên GPU SM ≥ 7.5 |
-| `--act` trên GPU không phải SM 8.9 / 12.0 | `compute_cap` | báo lỗi |
-| Cache checkpoint không khớp | `qtool.json` | in diff, gợi ý `--force` |
+| Tình huống                                                                                           | Phát hiện                               | Xử lý                                                                                                        |
+| ------------------------------------------------------------------------------------------------------ | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Không có Docker / GPU trong container                                                                | `docker info`, `nvidia-smi`           | báo lỗi                                                                                                      |
+| VRAM trống < ngưỡng: BF16 0.6 × size safetensors, FP32 1.0 × size (spike Q3, Q6)               | nvidia-smi                                | liệt kê PID / container / VRAM đang chiếm, dev tự dừng                                                   |
+| RAM khả dụng < ngưỡng: BF16 1.4 × size, FP32 3.5 × size (spike: 4B BF16 +10.8 GB, FP32 +28.6 GB) | `/proc/meminfo` `MemAvailable`          | báo số cần / số có; gợi ý GPU / máy khác                                                                   |
+| `quantize` với kiến trúc ngoài bảng model family                                                       | `config.json` `architectures`           | `architecture X is not supported by qtool quantize (supported: Qwen3_5ForConditionalGeneration)`             |
+| qtool khác đang chạy                                                                                | `.lock`                                 | `another qtool run (pid N) is active`                                                                        |
+| Task lm_eval không tồn tại                                                                          | hỏi danh sách task trong container eval | `unknown task '<x>'`                                                                                         |
+| `--act` với checkpoint không phải INT4 sym group-wise                                             | `quantization_config`                   | báo kiểu thực tế                                                                                           |
+| Máy có ≥ 2 GPU mà thiếu `--gpu`                                                                 | nvidia-smi                                | in bảng GPU (index, tên, SM, VRAM trống, process đang chiếm) để dev chọn                               |
+| Scheme ✗ trên SM của GPU (bảng mục 3)                                                             | `compute_cap`                           | báo lỗi + gợi ý scheme thay thế, vd `int8-w8a8 is not supported on SM 10.0. Use fp8-w8a8.`              |
+| Scheme ⚠ trên SM của GPU                                                                            | `compute_cap`                           | **cảnh báo, vẫn chạy**, vd `fp8-w8a8 on SM 8.6 runs as W8A16 (weight-only)`                        |
+| SM 7.0 mà không có `--no-eval`                                                                    | `compute_cap`                           | báo lỗi: eval không chạy được trên SM 7.0, thêm `--no-eval` rồi `qtool eval` trên GPU SM ≥ 7.5 |
+| `--act` trên GPU không phải SM 8.9 / 12.0                                                         | `compute_cap`                           | báo lỗi                                                                                                      |
+| Cache checkpoint không khớp                                                                          | `qtool.json`                            | in diff, gợi ý `--force`                                                                                   |
 
 Preflight in thêm dung lượng đĩa trống (tham khảo, không chặn).
 
 ### B. Lúc chạy — scheme FAILED, xử lý tiếp theo `--on-error`
 
-| Tình huống | Xử lý |
-|---|---|
-| Model đã quantize khi `quantize` | dừng ở [1/4] trước khi load weight, gợi ý `qtool eval` |
-| Model không phải BF16 | cảnh báo, load đúng dtype gốc |
-| Kiến trúc không được hỗ trợ | trích lỗi gốc + phiên bản thư viện trong image |
-| HF 401/403 | gợi ý `HF_TOKEN`; lỗi mạng khác: trích lỗi gốc |
-| OOM khi quantize | trích dòng OOM, gợi ý giảm `--calib-seq-len` / giải phóng GPU |
-| OOM khi vLLM load | trích lỗi gốc (`max_model_len` ghim sẵn theo spike) |
-| Hết đĩa (`ENOSPC`) | xoá thư mục tạm, báo lỗi |
+| Tình huống                         | Xử lý                                                                |
+| ------------------------------------ | ---------------------------------------------------------------------- |
+| Model đã quantize khi `quantize` | dừng ở [1/4] trước khi load weight, gợi ý `qtool eval`         |
+| Model không phải BF16              | cảnh báo, load đúng dtype gốc                                     |
+| Kiến trúc không được hỗ trợ  | trích lỗi gốc + phiên bản thư viện trong image                  |
+| HF 401/403                           | gợi ý `HF_TOKEN`; lỗi mạng khác: trích lỗi gốc               |
+| OOM khi quantize                     | trích dòng OOM, gợi ý giảm `--calib-seq-len` / giải phóng GPU |
+| Container compress exit 137 (chạm `--memory`) | báo hết RAM host + số RAM đã cấp; log gốc dừng đột ngột nên không có dòng lỗi để trích |
+| OOM khi vLLM load                    | trích lỗi gốc (`max_model_len` ghim sẵn theo spike)              |
+| Hết đĩa (`ENOSPC`)              | xoá thư mục tạm, báo lỗi                                         |
 
 Luôn dừng toàn bộ bất kể `--on-error`: lỗi bước dùng chung (tập calib); lỗi checkpoint
 `INT4-W4A16` → các scheme `int4-w4a8-*` bị skip kèm lý do.
 
 ### C. Parse
 
-| Tình huống | Xử lý |
-|---|---|
-| Thiếu dòng mong đợi | `unknown (not found in <nguồn>)` |
+| Tình huống                                        | Xử lý                                                                              |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Thiếu dòng mong đợi                             | `unknown (not found in <nguồn>)`                                                  |
 | `--act` mà log không có `MarlinLinearKernel` | kết quả **INVALID**: vẫn in điểm, ghi rõ không chứng minh được W4A8 |
-| `--act int8` | nhãn `[experimental: not yet verified on this stack]` |
-| Không có `results.json` | FAILED, không in điểm |
+| Không có `results.json`                         | FAILED, không in điểm                                                             |
 
 ## 8. Console output
 
-Minh hoạ (số liệu giả, ignore list và số layer chờ spike):
+Minh hoạ (bố cục chốt; ignore list, số subgraph, kích thước, VRAM lấy từ spike; điểm eval full là giả):
 
 ```
 $ qtool quantize Qwen/Qwen3.5-4B --scheme int4-w4a16,int4-w4a8-fp8
 
 qtool 0.1.0 · 2026-10-30 21:00:03 · RTX 4070 Ti SUPER 16 GB SM 8.9
-[preflight] GPU 0 · SM 8.9 · free 15.8 / 16.0 GB · compute dtype bfloat16 · disk free 789 GB · images OK
+[preflight] GPU 0 · SM 8.9 · VRAM free 15.9 / 16.0 GB (need 5.3) · RAM avail 27.1 GB (need 12.3)
+[preflight] compute dtype bfloat16 · image qtool-compress:cu129 · disk free 659 GB · family Qwen3.5
 
 Plan for Qwen/Qwen3.5-4B (2 schemes)
   quantize  INT4-W4A16  -> shared by: int4-w4a16, int4-w4a8-fp8
@@ -322,21 +415,23 @@ Plan for Qwen/Qwen3.5-4B (2 schemes)
 
 ══════ [2/4] Preparing calibration data ═══════════════════ 21:00:47
   source       : HuggingFaceH4/ultrachat_200k split=train_sft · 512 samples · seed 42
-  tokens/sample: min 61 · median 1,184 · max 2,048 (truncated: 97)
-  ✓ done in 21s
+  tokens/sample: min 199 · median 1,080 · max 2,048 (truncated: 48)
+  ✓ done in 10s
 
 ══════ [3/4] Quantizing INT4-W4A16 ═════════════════════════ 21:01:08
-  recipe       : GPTQModifier targets=Linear scheme=W4A16
-  ignore       : lm_head, <từ spike>
-  (17/33) Calibrating 512/512 [00:13]
-  saved        : checkpoints/INT4-W4A16 · 8.4 GB → 3.1 GB · GPU peak 11.2 GB
-  ✓ done in 8m 47s
+  recipe       : GPTQModifier targets=Linear scheme=W4A16 · sequential Qwen3_5DecoderLayer
+  ignore       : lm_head, embed_tokens, visual.*, linear_attn.*
+  (17/33) Calibrating 512/512 [00:13] · elapsed 7m 41s · est. 7m 15s left
+  saved        : checkpoints/INT4-W4A16 · 8.8 GB → 5.2 GB · GPU peak 5.0 GB · MTP saved
+  ✓ done in 15m 12s
 
-══════ [4/4] Evaluating int4-w4a8-fp8 ══════════════════════ 21:17:53
+══════ [4/4] Evaluating int4-w4a8-fp8 ══════════════════════ 21:16:20
   checkpoint   : checkpoints/INT4-W4A16 (shared)
   quantization : compressed-tensors · INT4 W4A16 g128 symmetric
   runtime env  : VLLM_MARLIN_INPUT_DTYPE=fp8
+  vLLM         : starting (load + compile + CUDA graphs) … 3m 52s
   kernel       : MarlinLinearKernel for CompressedTensorsWNA16
+  model memory : 5.11 GiB · KV cache 104,448 tokens
   lm_eval      : 1319/1319 [06:12]
   |Tasks|Filter          |n-shot|Metric     |Value|Stderr|
   |gsm8k|strict-match    |     5|exact_match|0.784|±0.011|
@@ -346,9 +441,9 @@ Plan for Qwen/Qwen3.5-4B (2 schemes)
 
 ══════ Summary · gsm8k strict-match (full) ═════════════════ total 41m 10s
   scheme          status   accuracy        Δ vs bf16   recovery   size
-  bf16            OK       0.812 ± 0.011   —           —          8.4 GB
-  int4-w4a16      OK       0.792 ± 0.011   −2.0 pp     97.5%      3.1 GB
-  int4-w4a8-fp8   OK       0.784 ± 0.011   −2.8 pp     96.6%      3.1 GB (shared)
+  bf16            OK       0.812 ± 0.011   —           —          8.8 GB
+  int4-w4a16      OK       0.792 ± 0.011   −2.0 pp     97.5%      5.2 GB
+  int4-w4a8-fp8   OK       0.784 ± 0.011   −2.8 pp     96.6%      5.2 GB (shared)
   results: ~/qtool/runs/Qwen3.5-4B/results/summary.json
 ```
 
@@ -357,18 +452,19 @@ trên model card). Bảng `|Tasks|...|` in lại nguyên văn từ lm_eval.
 
 ## 9. Testing (TDD)
 
-| Tầng | Chạy ở | Nội dung |
-|---|---|---|
-| 1. Unit | local, không GPU/Docker | `cli`, `schemes`, `plan` (gộp, cache, stale, dry-run), `parsers` trên **fixture log thật từ spike** (cả trường hợp thiếu dòng), `preflight` trên CSV nvidia-smi (chọn GPU / bắt buộc `--gpu`, bảng khả năng SM ✓/⚠/✗, `--compute-dtype auto`, ngưỡng VRAM), `report`, `runner` với docker giả (stub phát lại fixture, exit code tuỳ chọn, giả lập SIGINT): ghi atomic, dọn tạm, `--on-error`, exit 0/1/130 |
-| 2. Container | image compress, CPU, model tí hon ngẫu nhiên | `quantize.py`: thống kê calib, dòng `@qtool`, chặn model đã quantize, `oneshot` đầu-cuối, `qtool.json` |
-| 3. Integration | rtx4070, `@pytest.mark.gpu`, chạy tay | `qtool quantize` đầu-cuối với Qwen3.5 nhỏ nhất, `--eval-limit 20` |
-| 4. Acceptance | rtx4070 | `qtool eval RedHatAI/Qwen3.5-4B-quantized.w4a16 --act fp8` ra đúng dòng kernel như log bake-off 26/10; `int4-w4a16` tự làm vs checkpoint RedHat trên gsm8k full nằm trong stderr |
+| Tầng          | Chạy ở                                        | Nội dung                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Unit        | local, không GPU/Docker                        | `cli`, `schemes`, `plan` (gộp, cache, stale, dry-run), `parsers` trên **fixture log thật từ spike** (cả trường hợp thiếu dòng), `preflight` trên CSV nvidia-smi (chọn GPU / bắt buộc `--gpu`, bảng khả năng SM ✓/⚠/✗, `--compute-dtype auto`, ngưỡng VRAM), `report`, `runner` với docker giả (stub phát lại fixture, exit code tuỳ chọn, giả lập SIGINT): ghi atomic, dọn tạm, `--on-error`, exit 0/1/130 |
+| 2. Container   | image compress, CPU, model tí hon ngẫu nhiên | `quantize.py`: thống kê calib, dòng `@qtool`, chặn model đã quantize, `oneshot` đầu-cuối, `qtool.json`                                                                                                                                                                                                                                                                                                                                              |
+| 3. Integration | rtx4070, `@pytest.mark.gpu`, chạy tay        | `qtool quantize` đầu-cuối với Qwen3.5 nhỏ nhất, `--eval-limit 20`                                                                                                                                                                                                                                                                                                                                                                                          |
+| 4. Acceptance  | rtx4070                                         | `qtool eval RedHatAI/Qwen3.5-4B-quantized.w4a16 --act fp8` ra đúng dòng kernel như log bake-off 26/10; `int4-w4a16` tự làm vs checkpoint RedHat trên gsm8k full nằm trong stderr                                                                                                                                                                                                                                                                         |
 
 Output test phải sạch.
 
-## 10. Spike (làm trước khi code)
+## 10. Spike (đã xong 2026-10-30)
 
-Kết quả là câu trả lời + fixture; code spike bỏ đi. Dev tự dừng `qwen3.5-9b-fp8` trong lúc spike.
+Kết quả: `docs/spike/2026-10-30-findings.md` + `tests/fixtures/`. Cả 8 câu có câu trả lời từ lượt chạy thật;
+các mục 3, 5, 6, 7 của spec bản 2 đã cập nhật theo đó. Danh sách câu hỏi gốc:
 
 1. Tìm phiên bản llmcompressor hiểu Qwen3.5 **và** checkpoint xuất ra load được bằng vLLM 0.28 → ghim.
    Không có cặp nào → dừng, quay lại bàn kiến trúc (đổi image eval ảnh hưởng khả năng so với số bake-off).

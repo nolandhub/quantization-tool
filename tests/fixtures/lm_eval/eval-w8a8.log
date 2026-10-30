@@ -1,0 +1,123 @@
+2026-10-30:08:37:29 WARNING  [config.evaluate_config:337] --limit SHOULD ONLY BE USED FOR TESTING. REAL METRICS SHOULD NOT BE COMPUTED USING LIMIT.
+2026-10-30:08:37:41 INFO     [_cli.run:392] Selected Tasks: ['gsm8k']
+2026-10-30:08:37:46 INFO     [evaluator:214] Setting random seed to 0 | Setting numpy seed to 1234 | Setting torch manual seed to 1234 | Setting fewshot manual seed to 1234
+2026-10-30:08:37:46 INFO     [evaluator:239] Initializing vllm model, with arguments: {'pretrained': '/work/ckpt/INT8-W8A8', 'max_model_len': 4096, 'gpu_memory_utilization': 0.85, 'max_num_seqs': 64, 'enable_thinking': False}
+2026-10-30:08:38:06 WARNING  [models.vllm_causallms:108] The `device` argument is ignored by the vLLM backend. To select which GPU(s) vLLM can use, set the `CUDA_VISIBLE_DEVICES` environment variable before running lm-eval.
+INFO 10-30 08:38:07 [api_utils.py:272] non-default args: {'seed': 1234, 'max_model_len': 4096, 'gpu_memory_utilization': 0.85, 'max_num_seqs': 64, 'disable_log_stats': True, 'model': '/work/ckpt/INT8-W8A8'}
+INFO 10-30 08:38:26 [model.py:672] Resolved architecture: Qwen3_5ForConditionalGeneration
+INFO 10-30 08:38:26 [model.py:1965] Using max model len 4096
+WARNING 10-30 08:38:26 [model.py:963] Model does not support mm_device_do_normalize, forcing mm_device_do_normalize = False.
+<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.nvrtc module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.nvrtc module instead.
+[ERROR] `min_frames` is part of Qwen3VLVideoProcessorInitKwargs, but not documented. Make sure to add it to the docstring of the function in /usr/local/lib/python3.12/dist-packages/transformers/models/qwen3_vl/video_processing_qwen3_vl.py.
+[ERROR] `max_frames` is part of Qwen3VLVideoProcessorInitKwargs, but not documented. Make sure to add it to the docstring of the function in /usr/local/lib/python3.12/dist-packages/transformers/models/qwen3_vl/video_processing_qwen3_vl.py.
+INFO 10-30 08:38:31 [scheduler.py:242] Chunked prefill is enabled with max_num_batched_tokens=8192.
+INFO 10-30 08:38:31 [config.py:605] Mamba cache mode is set to 'align' for Qwen3_5ForConditionalGeneration by default when prefix caching is enabled
+INFO 10-30 08:38:31 [kernel.py:308] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['native'], fused_add_rms_norm=['native'])
+[transformers] The `use_fast` parameter is deprecated and will be removed in a future version. Use `backend="torchvision"` instead of `use_fast=True`, or `backend="pil"` instead of `use_fast=False`.
+WARNING 10-30 08:38:41 [system_utils.py:157] We must use the `spawn` multiprocessing start method. Overriding VLLM_WORKER_MULTIPROC_METHOD to 'spawn'. See https://docs.vllm.ai/en/latest/usage/troubleshooting.html#python-multiprocessing for more information. Reasons: CUDA is initialized
+<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.nvrtc module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.nvrtc module instead.
+(EngineCore pid=177) INFO 10-30 08:38:52 [core.py:122] Initializing a V1 LLM engine (v0.28.0) with config: model='/work/ckpt/INT8-W8A8', speculative_config=None, tokenizer='/work/ckpt/INT8-W8A8', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=4096, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=compressed-tensors, quantization_config=None, enforce_eager=False, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False, jit_monitor_mode='warn', jit_monitor_verbose=False), seed=1234, served_model_name=/work/ckpt/INT8-W8A8, enable_prefix_caching=True, enable_chunked_prefill=True, pooler_config=None, compilation_config={'mode': <CompilationMode.VLLM_COMPILE: 3>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['none'], 'ir_enable_torch_wrap': True, 'splitting_ops': ['vllm::unified_attention_with_output', 'vllm::unified_mla_attention_with_output', 'vllm::mamba_mixer2', 'vllm::mamba_mixer', 'vllm::short_conv', 'vllm::linear_attention', 'vllm::qwen_gdn_attention_core', 'vllm::qwen_gdn_attention_core_fused_norm_packed', 'vllm::gdn_attention_core_xpu', 'vllm::olmo_hybrid_gdn_full_forward', 'vllm::sparse_attn_indexer', 'vllm::rocm_aiter_sparse_attn_indexer', 'vllm::deepseek_v4_attention', 'vllm::hpc_rope_norm_forward', 'vllm::unified_kv_cache_update', 'vllm::unified_mla_kv_cache_update'], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_vision_items_per_batch': 0, 'encoder_cudagraph_max_frames_per_batch': None, 'compile_sizes': [], 'compile_ranges_endpoints': [8192], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.FULL_AND_PIECEWISE: (2, 1)>, 'cudagraph_num_of_warmups': 1, 'cudagraph_capture_sizes': [1, 2, 4, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': False, 'fuse_act_quant': False, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False, 'enable_qk_norm_rope_fusion': False, 'fuse_rope_kvcache_cat_mla': False, 'fuse_act_padding': False, 'fuse_qk_norm_rope_kvcache': False}, 'max_cudagraph_capture_size': 128, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': False, 'static_all_moe_layers': []}, kernel_config=KernelConfig(ir_op_priority=IrOpPriorityConfig(rms_norm=['native'], fused_add_rms_norm=['native']), enable_flashinfer_autotune=True, enable_cutedsl_warmup=True, enable_jit_warmup=True, enable_bf16x3_router_gemm=False, moe_backend='auto', linear_backend='auto')
+(EngineCore pid=177) [ERROR] `min_frames` is part of Qwen3VLVideoProcessorInitKwargs, but not documented. Make sure to add it to the docstring of the function in /usr/local/lib/python3.12/dist-packages/transformers/models/qwen3_vl/video_processing_qwen3_vl.py.
+(EngineCore pid=177) [ERROR] `max_frames` is part of Qwen3VLVideoProcessorInitKwargs, but not documented. Make sure to add it to the docstring of the function in /usr/local/lib/python3.12/dist-packages/transformers/models/qwen3_vl/video_processing_qwen3_vl.py.
+(EngineCore pid=177) INFO 10-30 08:38:54 [parallel_state.py:1638] world_size=1 rank=0 local_rank=0 distributed_init_method=file:///tmp/vllm_dist_6cc6b053ffd04e53b7234878a7403774 backend=nccl
+(EngineCore pid=177) INFO 10-30 08:38:54 [parallel_state.py:1982] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(EngineCore pid=177) INFO 10-30 08:38:55 [topk_topp_sampler.py:62] Using FlashInfer for top-p & top-k sampling.
+(EngineCore pid=177) [transformers] The `use_fast` parameter is deprecated and will be removed in a future version. Use `backend="torchvision"` instead of `use_fast=True`, or `backend="pil"` instead of `use_fast=False`.
+(EngineCore pid=177) INFO 10-30 08:39:02 [gpu_model_runner.py:5419] Starting to load model /work/ckpt/INT8-W8A8...
+(EngineCore pid=177) INFO 10-30 08:39:02 [cuda.py:545] Using backend AttentionBackendEnum.FLASH_ATTN for vit attention
+(EngineCore pid=177) INFO 10-30 08:39:02 [mm_encoder_attention.py:375] Using AttentionBackendEnum.FLASH_ATTN for MMEncoderAttention.
+(EngineCore pid=177) INFO 10-30 08:39:02 [qwen_gdn_linear_attn.py:158] Using Triton/FLA GDN prefill kernel (requested=auto, head_k_dim=128).
+(EngineCore pid=177) INFO 10-30 08:39:02 [qwen_gdn_linear_attn.py:500] Falling back to the Triton GDN decode path: torch.ops._C.fused_gdn_decode_post_conv_mtp is not built
+(EngineCore pid=177) INFO 10-30 08:39:02 [qwen_gdn_linear_attn.py:505] GDN decode kernel: triton
+(EngineCore pid=177) INFO 10-30 08:39:02 [__init__.py:755] Selected CutlassInt8ScaledMMLinearKernel for CompressedTensorsW8A8Int8
+(EngineCore pid=177) INFO 10-30 08:39:02 [cuda.py:486] Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN', 'FLASHINFER', 'TRITON_ATTN', 'FLEX_ATTENTION'].
+(EngineCore pid=177) INFO 10-30 08:39:02 [flash_attn.py:866] Using FlashAttention version 2
+(EngineCore pid=177) INFO 10-30 08:39:02 [weight_utils.py:858] Filesystem type for checkpoints: EXT4. Checkpoint size: 6.30 GiB. Available RAM: 22.79 GiB.
+(EngineCore pid=177) INFO 10-30 08:39:02 [weight_utils.py:881] Auto-prefetch is disabled because the filesystem (EXT4) is not a recognized network FS (NFS/Lustre). If you want to force prefetching, start vLLM with --safetensors-load-strategy=prefetch.
+(EngineCore pid=177) Loading safetensors checkpoint shards:   0% Completed | 0/2 [00:00<?, ?it/s]
+(EngineCore pid=177) Loading safetensors checkpoint shards:  50% Completed | 1/2 [00:09<00:09,  9.63s/it]
+(EngineCore pid=177) Loading safetensors checkpoint shards: 100% Completed | 2/2 [00:09<00:00,  4.82s/it]
+(EngineCore pid=177) 
+(EngineCore pid=177) INFO 10-30 08:39:12 [default_loader.py:430] Loading weights took 9.68 seconds
+(EngineCore pid=177) INFO 10-30 08:39:13 [gpu_model_runner.py:5515] Model loading took 6.29 GiB memory and 10.181902 seconds
+(EngineCore pid=177) INFO 10-30 08:39:13 [interface.py:911] Setting attention block size to 528 tokens to ensure that attention page size is >= mamba page size.
+(EngineCore pid=177) INFO 10-30 08:39:13 [interface.py:935] Padding mamba page size by 0.76% to ensure that mamba page size and attention page size are exactly equal.
+(EngineCore pid=177) INFO 10-30 08:39:13 [gpu_model_runner.py:6590] Encoder cache will be initialized with a budget of 16384 tokens, and profiled with 1 image items of the maximum feature size.
+(EngineCore pid=177) INFO 10-30 08:39:23 [backends.py:1094] Using cache directory: /root/.cache/vllm/torch_compile_cache/10fe3ef443/rank_0_0/backbone for vLLM's torch.compile
+(EngineCore pid=177) INFO 10-30 08:39:23 [backends.py:1155] Dynamo bytecode transform time: 7.17 s
+(EngineCore pid=177) [rank0]:W1030 08:39:24.522000 177 torch/_inductor/utils.py:1953] Not enough SMs to use max_autotune_gemm mode
+(EngineCore pid=177) INFO 10-30 08:40:02 [backends.py:393] Compiling a graph for compile range (1, 8192) takes 38.96 s
+(EngineCore pid=177) INFO 10-30 08:40:07 [backends.py:920] collected artifacts: 33 entries, 13 artifacts, 36877625 bytes total
+(EngineCore pid=177) INFO 10-30 08:40:07 [decorators.py:708] saved AOT compiled function to /root/.cache/vllm/torch_compile_cache/torch_aot_compile/17fcb637688308a5539a7a7f1ab88d5813b86ee52448e205c07f2bbca003b661/rank_0_0/model
+(EngineCore pid=177) INFO 10-30 08:40:07 [monitor.py:53] torch.compile took 50.69 s in total
+(EngineCore pid=177) /usr/local/lib/python3.12/dist-packages/triton/language/core.py:2284: UserWarning: tl.make_block_ptr is deprecated. Use TensorDescriptor or tl.make_tensor_descriptor instead.
+(EngineCore pid=177)   warn("tl.make_block_ptr is deprecated. Use TensorDescriptor or tl.make_tensor_descriptor instead.")
+(EngineCore pid=177) INFO 10-30 08:41:09 [monitor.py:81] Initial profiling/warmup run took 61.86 s
+(EngineCore pid=177) INFO 10-30 08:41:13 [gpu_model_runner.py:6816] Profiling CUDA graph memory: PIECEWISE=19 (largest=128), FULL=11 (largest=64)
+(EngineCore pid=177) INFO 10-30 08:41:15 [gpu_model_runner.py:6941] Estimated CUDA graph memory: 0.23 GiB total
+(EngineCore pid=177) INFO 10-30 08:41:15 [gpu_worker.py:578] Available KV cache memory: 4.53 GiB
+(EngineCore pid=177) INFO 10-30 08:41:15 [gpu_worker.py:593] CUDA graph memory profiling is enabled (default since v0.21.0). The current --gpu-memory-utilization=0.8500 is equivalent to --gpu-memory-utilization=0.8351 without CUDA graph memory profiling. To maintain the same effective KV cache size as before, increase --gpu-memory-utilization to 0.8649. To disable, set VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0.
+(EngineCore pid=177) INFO 10-30 08:41:15 [kv_cache_utils.py:1869] GPU KV cache size: 82,212 tokens, Maximum concurrency for 4,096 tokens per request: 20.07x
+(EngineCore pid=177) INFO 10-30 08:41:15 [qwen_triton_warmup.py:270] Warming up Qwen Triton kernels for model_type=qwen3_5_text.
+(EngineCore pid=177) INFO 10-30 08:41:17 [gpu_model_runner.py:7002] Rank 0: Torch profiler disabled for CUDA graph capture
+(EngineCore pid=177) Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):   0%|          | 0/19 [00:00<?, ?it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  21%|██        | 4/19 [00:00<00:00, 31.24it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  42%|████▏     | 8/19 [00:00<00:00, 31.52it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  63%|██████▎   | 12/19 [00:00<00:00, 32.65it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  84%|████████▍ | 16/19 [00:00<00:00, 32.37it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE): 100%|██████████| 19/19 [00:00<00:00, 30.84it/s]
+(EngineCore pid=177) Capturing CUDA graphs (decode, FULL):   0%|          | 0/11 [00:00<?, ?it/s]Capturing CUDA graphs (decode, FULL):  27%|██▋       | 3/11 [00:00<00:00, 26.86it/s]Capturing CUDA graphs (decode, FULL):  55%|█████▍    | 6/11 [00:00<00:00, 27.30it/s]Capturing CUDA graphs (decode, FULL):  82%|████████▏ | 9/11 [00:00<00:00, 27.57it/s]Capturing CUDA graphs (decode, FULL): 100%|██████████| 11/11 [00:00<00:00, 20.64it/s]
+(EngineCore pid=177) INFO 10-30 08:41:19 [gpu_model_runner.py:7048] Graph capturing finished in 2 secs, took 0.19 GiB
+(EngineCore pid=177) INFO 10-30 08:41:19 [gpu_worker.py:741] CUDA graph pool memory: 0.19 GiB (actual), 0.23 GiB (estimated), difference: 0.04 GiB (20.2%).
+(EngineCore pid=177) INFO 10-30 08:41:19 [gpu_worker.py:804] Free memory on device (15.02/15.57 GiB) on startup. Desired GPU memory utilization is (0.85, 13.23 GiB). Actual usage is 6.83 GiB for consumed memory (weights + non-torch), 1.87 GiB for peak activation, and 0.19 GiB for CUDAGraph memory. Replace gpu_memory_utilization config with `--kv-cache-memory=4502518068` (4.19 GiB) to fit into requested memory, or `--kv-cache-memory=6417761792` (5.98 GiB) to fully utilize gpu memory. Current kv cache memory in use is 4.53 GiB.
+(EngineCore pid=177) INFO 10-30 08:41:21 [jit_monitor.py:85] Kernel JIT monitor activated; monitored JIT compilations during inference will use mode=warn.
+(EngineCore pid=177) INFO 10-30 08:41:22 [torch_utils.py:262] Reducing Torch threads from 8 to 1 for serving. Set OMP_NUM_THREADS in the external environment to override.
+(EngineCore pid=177) INFO 10-30 08:41:22 [core.py:347] init engine (profile, create kv cache, warmup model) took 129.02 s (compilation: 50.69 s)
+(EngineCore pid=177) INFO 10-30 08:41:22 [kernel.py:308] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['native'], fused_add_rms_norm=['native'])
+INFO 10-30 08:41:23 [hf.py:551] Detected the chat template content format to be 'openai'. You can set `--chat-template-content-format` to override this.
+INFO 10-30 08:41:42 [base.py:235] Multi-modal warmup completed in 19.015s
+INFO 10-30 08:41:44 [base.py:235] Readonly multi-modal warmup completed in 1.326s
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-10-30:08:41:48 INFO     [evaluator_utils:472] Selected tasks:
+2026-10-30:08:41:48 INFO     [evaluator_utils:506] Task: gsm8k (gsm8k/gsm8k.yaml)
+2026-10-30:08:41:48 INFO     [evaluator:314] gsm8k: Using gen_kwargs: {'until': ['Question:', '</s>', '<|im_end|>'], 'do_sample': False, 'temperature': 0.0}
+2026-10-30:08:41:48 WARNING  [evaluator:335] Overwriting default num_fewshot of gsm8k from 5 to 5
+2026-10-30:08:41:48 INFO     [api.task:312] Building contexts for gsm8k on rank 0...
+  0%|          | 0/50 [00:00<?, ?it/s] 52%|█████▏    | 26/50 [00:00<00:00, 257.58it/s]100%|██████████| 50/50 [00:00<00:00, 257.82it/s]
+2026-10-30:08:41:49 INFO     [evaluator:589] Running generate_until requests
+Running generate_until requests:   0%|          | 0/50 [00:00<?, ?it/s]
+Rendering prompts:   0%|          | 0/50 [00:00<?, ?it/s][ARendering prompts: 100%|██████████| 50/50 [00:00<00:00, 1737.15it/s]
+
+Processed prompts:   0%|          | 0/50 [00:00<?, ?it/s, est. speed input: 0.00 toks/s, output: 0.00 toks/s][A(EngineCore pid=177) WARNING 10-30 08:41:49 [jit_monitor.py:141] Triton kernel JIT compilation during inference: batch_memcpy_kernel. This causes a latency spike; consider extending warmup to cover this shape/config.
+
+Processed prompts:   2%|▏         | 1/50 [00:05<04:22,  5.36s/it, est. speed input: 165.36 toks/s, output: 10.64 toks/s][A
+Processed prompts:   4%|▍         | 2/50 [00:05<01:53,  2.37s/it, est. speed input: 355.61 toks/s, output: 22.36 toks/s][A
+Processed prompts:   8%|▊         | 4/50 [00:06<00:47,  1.03s/it, est. speed input: 685.21 toks/s, output: 47.21 toks/s][A
+Processed prompts:  18%|█▊        | 9/50 [00:06<00:13,  3.00it/s, est. speed input: 1607.99 toks/s, output: 121.69 toks/s][A
+Processed prompts:  22%|██▏       | 11/50 [00:06<00:10,  3.84it/s, est. speed input: 1843.95 toks/s, output: 147.85 toks/s][A
+Processed prompts:  26%|██▌       | 13/50 [00:06<00:07,  4.99it/s, est. speed input: 2133.93 toks/s, output: 177.48 toks/s][A
+Processed prompts:  32%|███▏      | 16/50 [00:06<00:04,  7.32it/s, est. speed input: 2567.01 toks/s, output: 223.18 toks/s][A
+Processed prompts:  38%|███▊      | 19/50 [00:06<00:04,  7.28it/s, est. speed input: 2859.40 toks/s, output: 263.32 toks/s][A
+Processed prompts:  42%|████▏     | 21/50 [00:07<00:03,  8.37it/s, est. speed input: 3089.74 toks/s, output: 296.90 toks/s][A
+Processed prompts:  48%|████▊     | 24/50 [00:07<00:02,  9.32it/s, est. speed input: 3389.58 toks/s, output: 345.94 toks/s][A
+Processed prompts:  52%|█████▏    | 26/50 [00:07<00:02,  8.80it/s, est. speed input: 3583.35 toks/s, output: 377.52 toks/s][A
+Processed prompts:  56%|█████▌    | 28/50 [00:07<00:02,  9.78it/s, est. speed input: 3760.41 toks/s, output: 415.18 toks/s][A
+Processed prompts:  62%|██████▏   | 31/50 [00:07<00:01, 12.31it/s, est. speed input: 4059.13 toks/s, output: 469.95 toks/s][A
+Processed prompts:  68%|██████▊   | 34/50 [00:08<00:01, 14.31it/s, est. speed input: 4358.94 toks/s, output: 531.13 toks/s][A
+Processed prompts:  74%|███████▍  | 37/50 [00:08<00:00, 15.55it/s, est. speed input: 4630.82 toks/s, output: 593.57 toks/s][A
+Processed prompts:  78%|███████▊  | 39/50 [00:08<00:00, 15.25it/s, est. speed input: 4841.46 toks/s, output: 634.80 toks/s][A
+Processed prompts:  82%|████████▏ | 41/50 [00:08<00:00, 11.25it/s, est. speed input: 4969.54 toks/s, output: 667.00 toks/s][A
+Processed prompts:  86%|████████▌ | 43/50 [00:08<00:00, 10.67it/s, est. speed input: 5137.97 toks/s, output: 708.56 toks/s][A
+Processed prompts: 100%|██████████| 50/50 [00:08<00:00, 10.67it/s, est. speed input: 6025.41 toks/s, output: 906.81 toks/s][AProcessed prompts: 100%|██████████| 50/50 [00:08<00:00,  5.61it/s, est. speed input: 6025.41 toks/s, output: 906.81 toks/s]
+Running generate_until requests:   2%|▏         | 1/50 [00:08<07:18,  8.95s/it]Running generate_until requests: 100%|██████████| 50/50 [00:08<00:00,  5.59it/s]
+INFO 10-30 08:41:58 [utils.py:615] [shutdown] Process manager: send sigterm to process EngineCore
+(EngineCore pid=177) INFO 10-30 08:41:58 [core.py:1329] [shutdown] EngineCore: trigger received signal=SIGTERM
+(EngineCore pid=177) INFO 10-30 08:41:58 [core.py:1465] [shutdown] EngineCore: start mode=abort timeout=0s
+(EngineCore pid=177) INFO 10-30 08:41:58 [core.py:1496] [shutdown] EngineCore: request processing complete; starting resource teardown
+(EngineCore pid=177) INFO 10-30 08:41:58 [core.py:1342] [shutdown] EngineCore: exiting busy loop
+2026-10-30:08:42:01 INFO     [loggers.evaluation_tracker:247] Saving results aggregated
+2026-10-30:08:42:01 INFO     [loggers.evaluation_tracker:119] Saving per-task samples to out/w8a8/__work__ckpt__INT8-W8A8/*.jsonl
+vllm ({'pretrained': '/work/ckpt/INT8-W8A8', 'max_model_len': 4096, 'gpu_memory_utilization': 0.85, 'max_num_seqs': 64, 'enable_thinking': False}), gen_kwargs: ({}), limit: 50.0, num_fewshot: 5, batch_size: auto
+|Tasks|Version|     Filter     |n-shot|  Metric   |   |Value|   |Stderr|
+|-----|------:|----------------|-----:|-----------|---|----:|---|-----:|
+|gsm8k|      3|flexible-extract|     5|exact_match|↑  | 0.78|±  |0.0592|
+|     |       |strict-match    |     5|exact_match|↑  | 0.74|±  |0.0627|
+
+EXIT 0 WALL 278s

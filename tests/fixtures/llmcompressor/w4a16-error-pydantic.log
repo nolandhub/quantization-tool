@@ -1,0 +1,52 @@
+/work/quantize_spike.py:13: DeprecationWarning: Importing from 'llmcompressor.modifiers.smoothquant' is deprecated. Please update your imports to use 'llmcompressor.modifiers.transform.smoothquant' or 'llmcompressor.modifiers.transform' instead. This compatibility shim will be removed in a future version.
+  from llmcompressor.modifiers.smoothquant import SmoothQuantModifier
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+SPIKE config {"arch": ["Qwen3_5ForConditionalGeneration"], "dtype": "None", "quantized": false}
+Fetching 2 files:   0%|          | 0/2 [00:00<?, ?it/s]Fetching 2 files: 100%|██████████| 2/2 [00:00<00:00, 1179.50it/s]
+[transformers] The fast path is not available because one of the required library is not installed. Falling back to torch implementation. To install follow https://github.com/fla-org/flash-linear-attention#installation and https://github.com/Dao-AILab/causal-conv1d
+Loading weights:   0%|          | 0/723 [00:00<?, ?it/s]Loading weights:  13%|█▎        | 94/723 [00:00<00:00, 875.43it/s]Loading weights:  25%|██▌       | 182/723 [00:00<00:00, 876.36it/s]Loading weights:  58%|█████▊    | 421/723 [00:00<00:00, 1555.37it/s]Loading weights: 100%|██████████| 723/723 [00:00<00:00, 2271.43it/s]
+SPIKE load_seconds 4.7 params 4539265536
+Generating train_sft split:   0%|          | 0/207865 [00:00<?, ? examples/s]Generating train_sft split:   0%|          | 1000/207865 [00:00<01:00, 3417.15 examples/s]Generating train_sft split:   2%|▏         | 5000/207865 [00:00<00:14, 14130.35 examples/s]Generating train_sft split:   4%|▍         | 9000/207865 [00:00<00:10, 18365.52 examples/s]Generating train_sft split:   9%|▊         | 18000/207865 [00:00<00:05, 34132.02 examples/s]Generating train_sft split:  13%|█▎        | 27000/207865 [00:00<00:03, 46121.78 examples/s]Generating train_sft split:  17%|█▋        | 36000/207865 [00:00<00:03, 53261.44 examples/s]Generating train_sft split:  22%|██▏       | 45000/207865 [00:01<00:03, 52130.30 examples/s]Generating train_sft split:  26%|██▌       | 54000/207865 [00:01<00:02, 57207.05 examples/s]Generating train_sft split:  31%|███▏      | 65000/207865 [00:01<00:02, 66637.55 examples/s]Generating train_sft split:  36%|███▌      | 75289/207865 [00:01<00:01, 68925.65 examples/s]Generating train_sft split:  41%|████      | 84289/207865 [00:01<00:01, 71954.03 examples/s]Generating train_sft split:  45%|████▍     | 93289/207865 [00:01<00:01, 73486.82 examples/s]Generating train_sft split:  49%|████▉     | 102289/207865 [00:01<00:01, 75441.34 examples/s]Generating train_sft split:  54%|█████▎    | 111289/207865 [00:01<00:01, 76204.27 examples/s]Generating train_sft split:  57%|█████▋    | 119289/207865 [00:02<00:01, 73351.57 examples/s]Generating train_sft split:  61%|██████    | 127289/207865 [00:02<00:01, 74974.96 examples/s]Generating train_sft split:  65%|██████▌   | 135289/207865 [00:02<00:00, 74680.55 examples/s]Generating train_sft split:  70%|██████▉   | 144577/207865 [00:02<00:00, 76549.95 examples/s]Generating train_sft split:  74%|███████▍  | 154577/207865 [00:02<00:00, 79685.80 examples/s]Generating train_sft split:  79%|███████▊  | 163577/207865 [00:02<00:00, 82132.96 examples/s]Generating train_sft split:  83%|████████▎ | 172577/207865 [00:02<00:00, 81613.76 examples/s]Generating train_sft split:  87%|████████▋ | 181577/207865 [00:02<00:00, 82143.44 examples/s]Generating train_sft split:  92%|█████████▏| 190577/207865 [00:02<00:00, 82553.87 examples/s]Generating train_sft split:  98%|█████████▊| 203577/207865 [00:03<00:00, 81893.04 examples/s]Generating train_sft split: 100%|██████████| 207865/207865 [00:03<00:00, 65350.67 examples/s]
+Generating test_sft split:   0%|          | 0/23110 [00:00<?, ? examples/s]Generating test_sft split:  39%|███▉      | 9000/23110 [00:00<00:00, 75975.97 examples/s]Generating test_sft split:  82%|████████▏ | 19000/23110 [00:00<00:00, 84906.24 examples/s]Generating test_sft split: 100%|██████████| 23110/23110 [00:00<00:00, 88991.77 examples/s]
+Generating train_gen split:   0%|          | 0/256032 [00:00<?, ? examples/s]Generating train_gen split:   0%|          | 1000/256032 [00:00<01:17, 3270.26 examples/s]Generating train_gen split:   4%|▍         | 11000/256032 [00:00<00:07, 31489.03 examples/s]Generating train_gen split:   9%|▊         | 22000/256032 [00:00<00:05, 43091.25 examples/s]Generating train_gen split:  13%|█▎        | 33000/256032 [00:00<00:05, 41129.18 examples/s]Generating train_gen split:  17%|█▋        | 44000/256032 [00:01<00:04, 50458.75 examples/s]Generating train_gen split:  22%|██▏       | 56000/256032 [00:01<00:03, 61652.72 examples/s]Generating train_gen split:  26%|██▌       | 67000/256032 [00:01<00:02, 67572.11 examples/s]Generating train_gen split:  30%|███       | 78000/256032 [00:01<00:02, 72659.38 examples/s]Generating train_gen split:  34%|███▎      | 86344/256032 [00:01<00:02, 70318.90 examples/s]Generating train_gen split:  38%|███▊      | 96344/256032 [00:01<00:02, 71324.40 examples/s]Generating train_gen split:  42%|████▏     | 107344/256032 [00:01<00:01, 76692.32 examples/s]Generating train_gen split:  47%|████▋     | 119344/256032 [00:01<00:01, 79566.40 examples/s]Generating train_gen split:  51%|█████     | 130344/256032 [00:02<00:01, 77860.22 examples/s]Generating train_gen split:  56%|█████▌    | 142344/256032 [00:02<00:01, 71086.28 examples/s]Generating train_gen split:  60%|█████▉    | 153344/256032 [00:02<00:01, 51695.83 examples/s]Generating train_gen split:  64%|██████▍   | 164344/256032 [00:02<00:01, 58659.92 examples/s]Generating train_gen split:  67%|██████▋   | 171688/256032 [00:02<00:01, 54191.55 examples/s]Generating train_gen split:  71%|███████   | 181688/256032 [00:03<00:01, 55561.49 examples/s]Generating train_gen split:  75%|███████▌  | 192688/256032 [00:03<00:01, 56653.08 examples/s]Generating train_gen split:  80%|███████▉  | 204688/256032 [00:03<00:00, 56662.58 examples/s]Generating train_gen split:  84%|████████▍ | 215688/256032 [00:03<00:00, 58619.93 examples/s]Generating train_gen split:  89%|████████▊ | 226688/256032 [00:03<00:00, 59507.05 examples/s]Generating train_gen split:  93%|█████████▎| 237688/256032 [00:04<00:00, 60449.28 examples/s]Generating train_gen split:  97%|█████████▋| 248688/256032 [00:04<00:00, 64948.93 examples/s]Generating train_gen split: 100%|██████████| 256032/256032 [00:04<00:00, 60267.19 examples/s]
+Generating test_gen split:   0%|          | 0/28304 [00:00<?, ? examples/s]Generating test_gen split:   4%|▎         | 1000/28304 [00:00<00:05, 4808.07 examples/s]Generating test_gen split:  14%|█▍        | 4000/28304 [00:00<00:01, 14859.14 examples/s]Generating test_gen split:  39%|███▉      | 11000/28304 [00:00<00:00, 29164.87 examples/s]Generating test_gen split:  81%|████████▏ | 23000/28304 [00:00<00:00, 48308.42 examples/s]Generating test_gen split: 100%|██████████| 28304/28304 [00:00<00:00, 43757.40 examples/s]
+Map:   0%|          | 0/512 [00:00<?, ? examples/s]Map:  12%|█▎        | 64/512 [00:00<00:00, 622.62 examples/s]Map:  30%|██▉       | 153/512 [00:00<00:00, 770.47 examples/s]Map:  49%|████▉     | 251/512 [00:00<00:00, 843.41 examples/s]Map:  68%|██████▊   | 348/512 [00:00<00:00, 884.77 examples/s]Map:  89%|████████▉ | 456/512 [00:00<00:00, 950.17 examples/s]Map: 100%|██████████| 512/512 [00:00<00:00, 838.52 examples/s]
+Map:   0%|          | 0/512 [00:00<?, ? examples/s]Map:   8%|▊         | 43/512 [00:00<00:01, 412.47 examples/s]Map:  19%|█▉        | 99/512 [00:00<00:00, 488.76 examples/s]Map:  33%|███▎      | 170/512 [00:00<00:00, 471.84 examples/s]Map:  47%|████▋     | 239/512 [00:00<00:00, 458.41 examples/s]Map:  56%|█████▌    | 286/512 [00:00<00:00, 459.88 examples/s]Map:  66%|██████▌   | 338/512 [00:00<00:00, 472.53 examples/s]Map:  76%|███████▌  | 390/512 [00:00<00:00, 482.33 examples/s]Map:  89%|████████▉ | 457/512 [00:00<00:00, 463.42 examples/s]Map:  99%|█████████▊| 505/512 [00:01<00:00, 466.09 examples/s]Map: 100%|██████████| 512/512 [00:01<00:00, 403.26 examples/s]
+SPIKE calib {"n": 512, "min": 199, "median": 1080.0, "max": 2048, "truncated": 48, "seconds": 98.4}
+Traceback (most recent call last):
+  File "/work/quantize_spike.py", line 51, in <module>
+    gptq = GPTQModifier(targets="Linear", scheme=a.scheme, ignore=IGNORE, sequential_targets=["Qwen3_5DecoderLayer"])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/pydantic/main.py", line 280, in __init__
+    validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+pydantic_core._pydantic_core.ValidationError: 1 validation error for GPTQModifier
+sequential_targets
+  Extra inputs are not permitted [type=extra_forbidden, input_value=['Qwen3_5DecoderLayer'], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.14/v/extra_forbidden
+Command exited with non-zero status 1
+	Command being timed: "docker run --rm --gpus all --name qtool-spike -e HF_TOKEN -v /home/nhandlt2/.cache/huggingface:/root/.cache/huggingface -v /home/nhandlt2/qtool-spike:/work -w /work qtool-compress:spike python quantize_spike.py --scheme W4A16 --out /work/ckpt/INT4-W4A16"
+	User time (seconds): 0.01
+	System time (seconds): 0.02
+	Percent of CPU this job got: 0%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 1:52.56
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 31956
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 3346
+	Voluntary context switches: 978
+	Involuntary context switches: 9
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 48
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 1
+EXIT 1

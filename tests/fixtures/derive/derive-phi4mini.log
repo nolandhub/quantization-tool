@@ -1,0 +1,30 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[transformers] This model config has set a `rope_parameters['original_max_position_embeddings']` field, to be used together with `max_position_embeddings` to determine a scaling factor. Please set the `factor` field of `rope_parameters`with this ratio instead -- we recommend the use of this field over `original_max_position_embeddings`, as it is compatible with most model architectures.
+SPIKE config {"arch": ["Phi3ForCausalLM"], "model_type": "phi3", "orig_dtype": "bfloat16", "multimodal": false, "loader": "AutoModelForCausalLM", "tie_word_embeddings": true, "quantized": false}
+Loading weights:   0%|          | 0/194 [00:00<?, ?it/s]Loading weights:  52%|█████▏    | 100/194 [00:00<00:00, 987.84it/s]Loading weights: 100%|██████████| 194/194 [00:00<00:00, 1630.48it/s]
+SPIKE load {"seconds": 0.9, "class": "Phi3ForCausalLM", "params": 3836021760}
+SPIKE derived {"ignore": ["re:.*lm_head"], "why": {"re:.*lm_head": "output head"}, "sequential_target": "Phi3DecoderLayer", "sequential_list": "model.layers", "num_layers": 32, "num_experts": null, "mtp": false, "linears_total": 129, "linears_quantized": 128, "quantized_sample": ["model.layers.N.mlp.down_proj", "model.layers.N.mlp.gate_up_proj", "model.layers.N.self_attn.o_proj", "model.layers.N.self_attn.qkv_proj"], "no_split_modules": "{'Phi3DecoderLayer'}"}
+	Command being timed: "docker run --rm --gpus all --name qtool-spike -e HF_TOKEN -v /home/nhandlt2/.cache/huggingface:/root/.cache/huggingface -v /home/nhandlt2/qtool-spike:/work -w /work qtool-compress:spike python quantize_generic.py --model microsoft/Phi-4-mini-instruct --derive-only"
+	User time (seconds): 0.02
+	System time (seconds): 0.02
+	Percent of CPU this job got: 0%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:07.97
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 32808
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 3250
+	Voluntary context switches: 484
+	Involuntary context switches: 73
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+EXIT 0

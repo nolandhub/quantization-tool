@@ -1,0 +1,31 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+SPIKE config {"arch": ["Qwen3_5ForConditionalGeneration"], "model_type": "qwen3_5", "orig_dtype": "bfloat16", "multimodal": true, "loader": "AutoModelForImageTextToText", "tie_word_embeddings": true, "quantized": false}
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+[transformers] The fast path is not available because one of the required library is not installed. Falling back to torch implementation. To install follow https://github.com/fla-org/flash-linear-attention#installation and https://github.com/Dao-AILab/causal-conv1d
+Loading weights:   0%|          | 0/723 [00:00<?, ?it/s]Loading weights:  17%|█▋        | 122/723 [00:00<00:00, 1216.85it/s]Loading weights:  34%|███▎      | 244/723 [00:00<00:00, 1087.14it/s]Loading weights:  49%|████▉     | 354/723 [00:00<00:00, 1067.11it/s]Loading weights:  64%|██████▍   | 462/723 [00:00<00:00, 948.79it/s] Loading weights:  77%|███████▋  | 559/723 [00:00<00:00, 868.07it/s]Loading weights:  93%|█████████▎| 671/723 [00:00<00:00, 942.13it/s]Loading weights: 100%|██████████| 723/723 [00:00<00:00, 971.60it/s]
+SPIKE load {"seconds": 2.0, "class": "Qwen3_5ForConditionalGeneration", "params": 4539265536}
+SPIKE derived {"ignore": ["re:.*lm_head", "re:.*visual.*", "re:.*linear_attn.*"], "why": {"re:.*lm_head": "output head", "re:.*visual.*": "vision/projector", "re:.*linear_attn.*": "hybrid linear-attention / SSM mixer"}, "sequential_target": "Qwen3_5DecoderLayer", "sequential_list": "model.language_model.layers", "num_layers": 32, "num_experts": null, "mtp": true, "linears_total": 347, "linears_quantized": 128, "quantized_sample": ["model.language_model.layers.N.mlp.down_proj", "model.language_model.layers.N.mlp.gate_proj", "model.language_model.layers.N.mlp.up_proj", "model.language_model.layers.N.self_attn.k_proj", "model.language_model.layers.N.self_attn.o_proj", "model.language_model.layers.N.self_attn.q_proj", "model.language_model.layers.N.self_attn.v_proj"], "no_split_modules": "{'Qwen3_5VisionBlock', 'Qwen3_5DecoderLayer'}"}
+	Command being timed: "docker run --rm --gpus all --name qtool-spike -e HF_TOKEN -v /home/nhandlt2/.cache/huggingface:/root/.cache/huggingface -v /home/nhandlt2/qtool-spike:/work -w /work qtool-compress:spike python quantize_generic.py --model Qwen/Qwen3.5-4B --derive-only"
+	User time (seconds): 0.02
+	System time (seconds): 0.02
+	Percent of CPU this job got: 0%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:12.29
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 32248
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 3354
+	Voluntary context switches: 557
+	Involuntary context switches: 70
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+EXIT 0

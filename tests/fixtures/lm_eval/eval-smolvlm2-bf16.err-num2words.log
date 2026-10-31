@@ -1,0 +1,89 @@
+2026-10-31:02:43:45 WARNING  [config.evaluate_config:337] --limit SHOULD ONLY BE USED FOR TESTING. REAL METRICS SHOULD NOT BE COMPUTED USING LIMIT.
+2026-10-31:02:43:55 INFO     [_cli.run:392] Selected Tasks: ['gsm8k']
+2026-10-31:02:43:58 INFO     [evaluator:214] Setting random seed to 0 | Setting numpy seed to 1234 | Setting torch manual seed to 1234 | Setting fewshot manual seed to 1234
+2026-10-31:02:43:58 INFO     [evaluator:239] Initializing vllm model, with arguments: {'pretrained': 'HuggingFaceTB/SmolVLM2-2.2B-Instruct', 'max_model_len': 4096, 'gpu_memory_utilization': 0.85, 'max_num_seqs': 64, 'enable_thinking': False}
+2026-10-31:02:44:12 WARNING  [models.vllm_causallms:108] The `device` argument is ignored by the vLLM backend. To select which GPU(s) vLLM can use, set the `CUDA_VISIBLE_DEVICES` environment variable before running lm-eval.
+INFO 10-31 02:44:13 [api_utils.py:272] non-default args: {'seed': 1234, 'max_model_len': 4096, 'gpu_memory_utilization': 0.85, 'max_num_seqs': 64, 'disable_log_stats': True, 'model': 'HuggingFaceTB/SmolVLM2-2.2B-Instruct'}
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[transformers] Model config: pad_token_id must be `None` or an integer within the vocabulary (between 0 and 31999), got 128002. This may result in unexpected behavior.
+INFO 10-31 02:44:25 [model.py:672] Resolved architecture: SmolVLMForConditionalGeneration
+INFO 10-31 02:44:25 [model.py:2296] Downcasting torch.float32 to torch.bfloat16.
+INFO 10-31 02:44:25 [model.py:1965] Using max model len 4096
+WARNING 10-31 02:44:25 [model.py:963] Model does not support mm_device_do_normalize, forcing mm_device_do_normalize = False.
+INFO 10-31 02:44:25 [scheduler.py:242] Chunked prefill is enabled with max_num_batched_tokens=8192.
+INFO 10-31 02:44:25 [kernel.py:308] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['native'], fused_add_rms_norm=['native'])
+Traceback (most recent call last):
+  File "/usr/local/bin/lm_eval", line 6, in <module>
+    sys.exit(cli_evaluate())
+             ^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/lm_eval/__main__.py", line 10, in cli_evaluate
+    parser.execute(args)
+  File "/usr/local/lib/python3.12/dist-packages/lm_eval/_cli/harness.py", line 60, in execute
+    args.func(args)
+  File "/usr/local/lib/python3.12/dist-packages/lm_eval/_cli/run.py", line 395, in _execute
+    results = simple_evaluate(
+              ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/lm_eval/utils.py", line 580, in _wrapper
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/lm_eval/evaluator.py", line 242, in simple_evaluate
+    lm = lm_eval.api.registry.get_model(model).create_from_arg_obj(
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/lm_eval/api/model.py", line 169, in create_from_arg_obj
+    return cls(**arg_dict, **additional_config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/lm_eval/models/vllm_causallms.py", line 154, in __init__
+    self.model = LLM(**self.model_args)  # type: ignore[invalid-argument-type]
+                 ^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/llm.py", line 343, in __init__
+    self.llm_engine = LLMEngine.from_engine_args(
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/llm_engine.py", line 179, in from_engine_args
+    return cls(
+           ^^^^
+  File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/llm_engine.py", line 94, in __init__
+    self.input_processor = InputProcessor(self.vllm_config, renderer)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/input_processor.py", line 64, in __init__
+    mm_budget = MultiModalBudget(vllm_config, mm_registry)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/vllm/multimodal/encoder_budget.py", line 94, in __init__
+    all_mm_max_toks_per_item = get_mm_max_toks_per_item(
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/vllm/multimodal/encoder_budget.py", line 33, in get_mm_max_toks_per_item
+    mm_inputs = mm_registry.get_dummy_mm_inputs(
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/vllm/multimodal/registry.py", line 258, in get_dummy_mm_inputs
+    processor_inputs = processor.dummy_inputs.get_dummy_processor_inputs(
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/vllm/multimodal/processing/dummy_inputs.py", line 82, in get_dummy_processor_inputs
+    dummy_text = self.get_dummy_text(mm_counts)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/models/idefics3.py", line 213, in get_dummy_text
+    processor = self.info.get_hf_processor()
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/models/smolvlm.py", line 17, in get_hf_processor
+    return self.ctx.get_hf_processor(SmolVLMProcessor, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/vllm/multimodal/processing/context.py", line 204, in get_hf_processor
+    return cached_processor_from_config(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/vllm/transformers_utils/processor.py", line 391, in cached_processor_from_config
+    return cached_get_processor_without_dynamic_kwargs(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/vllm/transformers_utils/processor.py", line 359, in cached_get_processor_without_dynamic_kwargs
+    processor = cached_get_processor(
+                ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/vllm/transformers_utils/processor.py", line 245, in get_processor
+    processor = processor_cls.from_pretrained(
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/transformers/processing_utils.py", line 1732, in from_pretrained
+    return cls.from_args_and_dict(args, processor_dict, **instantiation_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/transformers/processing_utils.py", line 1500, in from_args_and_dict
+    processor = cls(*args, **valid_kwargs)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/transformers/models/smolvlm/processing_smolvlm.py", line 137, in __init__
+    raise ImportError(
+ImportError: Package `num2words` is required to run SmolVLM processor. Install it with `pip install num2words`.
+EXIT 1 WALL 46s

@@ -1,0 +1,32 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+SPIKE config {"arch": ["OlmoeForCausalLM"], "model_type": "olmoe", "orig_dtype": "bfloat16", "multimodal": false, "loader": "AutoModelForCausalLM", "tie_word_embeddings": false, "quantized": false}
+Loading weights:   0%|          | 0/179 [00:00<?, ?it/s]Loading weights:   2%|▏         | 4/179 [00:00<00:30,  5.78it/s]Loading weights:   3%|▎         | 5/179 [00:02<01:23,  2.09it/s]Loading weights:   8%|▊         | 15/179 [00:02<00:24,  6.74it/s]Loading weights:   9%|▉         | 16/179 [00:03<00:39,  4.10it/s]Loading weights:  15%|█▍        | 26/179 [00:04<00:20,  7.56it/s]Loading weights:  16%|█▌        | 28/179 [00:05<00:29,  5.20it/s]Loading weights:  21%|██        | 37/179 [00:05<00:17,  7.93it/s]Loading weights:  22%|██▏       | 39/179 [00:06<00:25,  5.54it/s]Loading weights:  27%|██▋       | 48/179 [00:07<00:16,  8.13it/s]Loading weights:  28%|██▊       | 50/179 [00:08<00:22,  5.69it/s]Loading weights:  33%|███▎      | 59/179 [00:09<00:14,  8.23it/s]Loading weights:  34%|███▍      | 61/179 [00:10<00:20,  5.77it/s]Loading weights:  39%|███▉      | 70/179 [00:10<00:13,  8.30it/s]Loading weights:  40%|████      | 72/179 [00:11<00:18,  5.90it/s]Loading weights:  45%|████▌     | 81/179 [00:12<00:11,  8.58it/s]Loading weights:  46%|████▋     | 83/179 [00:12<00:15,  6.24it/s]Loading weights:  51%|█████▏    | 92/179 [00:13<00:09,  8.80it/s]Loading weights:  53%|█████▎    | 94/179 [00:14<00:14,  6.05it/s]Loading weights:  58%|█████▊    | 103/179 [00:15<00:09,  8.34it/s]Loading weights:  59%|█████▊    | 105/179 [00:16<00:13,  5.60it/s]Loading weights:  64%|██████▎   | 114/179 [00:16<00:08,  8.03it/s]Loading weights:  65%|██████▍   | 116/179 [00:17<00:10,  5.95it/s]Loading weights:  70%|██████▉   | 125/179 [00:18<00:06,  8.38it/s]Loading weights:  71%|███████   | 127/179 [00:19<00:08,  5.91it/s]Loading weights:  76%|███████▌  | 136/179 [00:19<00:05,  8.18it/s]Loading weights:  77%|███████▋  | 138/179 [00:20<00:06,  5.89it/s]Loading weights:  82%|████████▏ | 147/179 [00:21<00:03,  8.18it/s]Loading weights:  83%|████████▎ | 149/179 [00:22<00:05,  5.42it/s]Loading weights:  88%|████████▊ | 158/179 [00:23<00:02,  7.47it/s]Loading weights:  89%|████████▉ | 159/179 [00:26<00:07,  2.78it/s]Loading weights:  94%|█████████▍| 169/179 [00:27<00:02,  4.37it/s]Loading weights:  95%|█████████▍| 170/179 [00:32<00:04,  2.02it/s]Loading weights: 100%|██████████| 179/179 [00:32<00:00,  5.56it/s]
+SPIKE load {"seconds": 34.5, "class": "OlmoeForCausalLM", "params": 6919161856}
+2026-10-31T01:28:25.3294 | linearize_moe | WARNING - MoE is being linearized after loading in order to support efficient calibration of experts. However, this may be inefficient if the model checkpoint is already linearized (2D -> 3D -> 2D). Consider registering a load converter for faster load times. See https://docs.vllm.ai/projects/llm-compressor/en/latest/developer-tutorials/add-moe-support
+Linearizing experts:   0%|          | 0/16 [00:00<?, ?it/s]Linearizing experts:   6%|▋         | 1/16 [00:03<00:59,  4.00s/it]Linearizing experts:  12%|█▎        | 2/16 [00:08<01:01,  4.42s/it]Linearizing experts:  19%|█▉        | 3/16 [00:13<00:59,  4.61s/it]Linearizing experts:  25%|██▌       | 4/16 [00:19<01:00,  5.03s/it]Linearizing experts:  31%|███▏      | 5/16 [00:23<00:53,  4.90s/it]Linearizing experts:  38%|███▊      | 6/16 [00:25<00:39,  3.93s/it]Linearizing experts:  44%|████▍     | 7/16 [00:27<00:28,  3.22s/it]Linearizing experts:  50%|█████     | 8/16 [00:29<00:22,  2.82s/it]Linearizing experts:  56%|█████▋    | 9/16 [00:31<00:17,  2.54s/it]Linearizing experts:  62%|██████▎   | 10/16 [00:33<00:14,  2.41s/it]Linearizing experts:  69%|██████▉   | 11/16 [00:35<00:11,  2.34s/it]Linearizing experts:  75%|███████▌  | 12/16 [00:37<00:08,  2.03s/it]Linearizing experts:  81%|████████▏ | 13/16 [00:38<00:05,  1.88s/it]Linearizing experts:  88%|████████▊ | 14/16 [00:41<00:04,  2.21s/it]Linearizing experts:  94%|█████████▍| 15/16 [00:46<00:02,  2.97s/it]Linearizing experts: 100%|██████████| 16/16 [00:53<00:00,  4.28s/it]Linearizing experts: 100%|██████████| 16/16 [00:53<00:00,  3.36s/it]
+SPIKE linearize {"fused_expert_modules": 16, "seconds": 54.5}
+SPIKE derived {"ignore": ["re:.*lm_head"], "why": {"re:.*lm_head": "output head"}, "sequential_target": "OlmoeDecoderLayer", "sequential_list": "model.layers", "num_layers": 16, "num_experts": 64, "mtp": false, "linears_total": 3137, "linears_quantized": 3136, "quantized_sample": ["model.layers.N.mlp.experts.N.down_proj", "model.layers.N.mlp.experts.N.gate_proj", "model.layers.N.mlp.experts.N.up_proj", "model.layers.N.self_attn.k_proj", "model.layers.N.self_attn.o_proj", "model.layers.N.self_attn.q_proj", "model.layers.N.self_attn.v_proj"], "no_split_modules": "{'OlmoeDecoderLayer'}"}
+	Command being timed: "docker run --rm --gpus all --name qtool-spike -e HF_TOKEN -v /home/nhandlt2/.cache/huggingface:/root/.cache/huggingface -v /home/nhandlt2/qtool-spike:/work -w /work qtool-compress:spike python quantize_generic.py --model allenai/OLMoE-1B-7B-0125-Instruct --derive-only"
+	User time (seconds): 0.02
+	System time (seconds): 0.03
+	Percent of CPU this job got: 0%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 1:48.06
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 31192
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 367
+	Minor (reclaiming a frame) page faults: 3303
+	Voluntary context switches: 1263
+	Involuntary context switches: 84
+	Swaps: 0
+	File system inputs: 22616
+	File system outputs: 64
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+EXIT 0

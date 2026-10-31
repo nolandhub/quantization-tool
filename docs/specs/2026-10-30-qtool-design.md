@@ -1,6 +1,6 @@
 # qtool — Design Spec
 
-Ngày: 2026-10-30 · Trạng thái: bản 2 (cập nhật theo spike, `docs/spike/2026-10-30-findings.md`), chờ Nhân duyệt · Repo: `~/ws-DoNhan/qtool` (local) · máy phát triển và kiểm chứng: `rtx4070:~/qtool` (RTX 4070 Ti SUPER, SM 8.9)
+Ngày: 2026-10-30 · Trạng thái: bản 3 (cập nhật theo spike 1 + 2, `docs/spike/2026-10-30-findings.md`), chờ Nhân duyệt · Repo: `~/ws-DoNhan/qtool` (local) · máy phát triển và kiểm chứng: `rtx4070:~/qtool` (RTX 4070 Ti SUPER, SM 8.9)
 
 ## 1. Mục tiêu
 

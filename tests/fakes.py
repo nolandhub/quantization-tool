@@ -28,7 +28,7 @@ class FakeDocker:
     def __init__(self, fixtures, rd):
         self.fixtures, self.rd = fixtures, rd
         self.specs = []
-        self.quantize = {}  # checkpoint -> "ok" | "fail-step2" | "fail-step3" | "killed"
+        self.quantize = {}  # checkpoint -> "ok" | "fail-step2" | "fail-step3" | "killed" | "no-saved"
         self.probes = {}  # model -> probe event fields (defaults: Qwen3.5-4B BF16)
         self.evals = {}  # label -> (log fixture, results dir fixture or None, exit code)
 
@@ -80,6 +80,8 @@ class FakeDocker:
             return out + ["Traceback (most recent call last):", "datasets.exceptions.DatasetNotFoundError: no such dataset"], 1
         out += [ev("calib", source="HuggingFaceH4/ultrachat_200k:train_sft", template="chat_template(str)", n=512, min=199,
                    median=1080, max=2048, truncated=48, cached=False, seconds=8.2), ev("step", n=3)]
+        if mode == "no-saved":
+            return out, 0
         if mode == "fail-step3":
             return out + self.lines("llmcompressor/w4a16-error-no-cc.log"), 1
         if mode == "killed":

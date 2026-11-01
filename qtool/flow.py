@@ -231,8 +231,10 @@ def quantize_checkpoint(s: Session, o: QuantizeOptions, ckpt: str, signature: di
             raise StepFailed(st["refused"]["reason"] + (f" ({hint})" if hint else ""), st["step"])
         if code != 0:
             raise StepFailed(failure_reason(code, tail, s.memory_bytes), st["step"])
+        if not st["saved"]:
+            raise StepFailed("quantize finished without a saved event (see log)", 3)
     c.done(s.clock() - st["t"])
-    return st["saved"] or {"bytes": dir_bytes(s.rd / "checkpoints" / ckpt)}
+    return st["saved"]
 
 
 # ---- eval (step 4) ------------------------------------------------------------------------------------------
@@ -288,65 +290,76 @@ def eval_job(s: Session, job: EvalJob, tasks: list[str], limit: int | None, mode
     tmp = s.rd / "results" / f".tmp-{job.label}"
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir(parents=True)
-    cmd = ["lm_eval", "--model", "vllm", "--model_args", model_args(model, job.quantization), "--tasks", ",".join(tasks),
-           "--batch_size", "auto", "--output_path", f"/runs/results/{tmp.name}", "--log_samples"]
-    cmd += ["--apply_chat_template", "--fewshot_as_multiturn"] if mode == "chat" else []
-    cmd += ["--limit", str(limit)] if limit else []
-    p, tail, shown = parsers.EvalProgress(), deque(maxlen=400), set()
+    try:
+        cmd = ["lm_eval", "--model", "vllm", "--model_args", model_args(model, job.quantization), "--tasks", ",".join(tasks),
+               "--batch_size", "auto", "--output_path", f"/runs/results/{tmp.name}", "--log_samples"]
+        cmd += ["--apply_chat_template", "--fewshot_as_multiturn"] if mode == "chat" else []
+        cmd += ["--limit", str(limit)] if limit else []
+        p, tail, shown = parsers.EvalProgress(), deque(maxlen=400), set()
 
-    def on_line(line):
-        tail.append(line)
-        before = len(p.kernels)
-        if not p.feed(line):
-            return
-        for k in p.kernels[before:]:
-            c.kv("kernel", k)
-        if p.kv_tokens and "kv" not in shown:
-            shown.add("kv")
-            c.kv("model memory", f"{p.load_gib} GiB · KV cache {p.kv_tokens:,} tokens")
-        if p.downcast and "dc" not in shown:
-            shown.add("dc")
-            c.kv("downcast", p.downcast.replace("->", " → ") + " (checkpoint stored in a wider dtype)")
+        def on_line(line):
+            tail.append(line)
+            before = len(p.kernels)
+            if not p.feed(line):
+                return
+            for k in p.kernels[before:]:
+                c.kv("kernel", k)
+            if p.kv_tokens and "kv" not in shown:
+                shown.add("kv")
+                c.kv("model memory", f"{p.load_gib} GiB · KV cache {p.kv_tokens:,} tokens")
+            if p.downcast and "dc" not in shown:
+                shown.add("dc")
+                c.kv("downcast", p.downcast.replace("->", " → ") + " (checkpoint stored in a wider dtype)")
 
-    def on_tick():
-        if p.started:
-            c.status(f"lm_eval      : {p.prompts_done}/{p.prompts_total} prompts")
-        elif "kv" not in shown:
-            c.status(f"vLLM         : starting (load + compile + CUDA graphs) … {fmt_duration(s.clock() - t0)}")
+        def on_tick():
+            if p.started:
+                c.status(f"lm_eval      : {p.prompts_done}/{p.prompts_total} prompts")
+            elif "kv" not in shown:
+                c.status(f"vLLM         : starting (load + compile + CUDA graphs) … {fmt_duration(s.clock() - t0)}")
 
-    code = s.run_container(container_spec(s, s.eval_image, cmd, mounts, env=job.env), s.rd / "logs" / f"{job.label}.eval.log",
-                 on_line, on_tick)
-    c.end_status()
-    path = parsers.find_results_json(tmp) if code == 0 else None
-    if path is None:
+        code = s.run_container(container_spec(s, s.eval_image, cmd, mounts, env=job.env), s.rd / "logs" / f"{job.label}.eval.log",
+                     on_line, on_tick)
+        c.end_status()
+        path = parsers.find_results_json(tmp) if code == 0 else None
+        if path is None:
+            shutil.rmtree(tmp, ignore_errors=True)
+            reason = failure_reason(code, tail, None) if code != 0 else "lm_eval finished without results_*.json"
+            c.failed(reason)
+            c.line(f"  log: {s.rd / 'logs' / f'{job.label}.eval.log'}")
+            return EvalResult("FAILED", reason=reason)
+        try:
+            raw = json.loads(path.read_text())
+            metrics = parsers.metrics_from(raw["results"])
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            shutil.rmtree(tmp, ignore_errors=True)
+            reason = f"unreadable lm_eval results: {type(e).__name__}"
+            c.failed(reason)
+            c.line(f"  log: {s.rd / 'logs' / f'{job.label}.eval.log'}")
+            return EvalResult("FAILED", reason=reason)
+        c.kv("lm_eval", f"{p.prompts_done}/{p.prompts_total} prompts")
+        for line in p.table:
+            c.line("  " + line)
+        save_task_results(s.rd, job.label, raw, tasks, meta_for)
+        raw_dir = s.rd / "results" / "raw" / job.label
+        shutil.rmtree(raw_dir, ignore_errors=True)
+        raw_dir.parent.mkdir(parents=True, exist_ok=True)
+        tmp.rename(raw_dir)
+        status = "OK"
+        if job.expect_marlin and not any(k.startswith("MarlinLinearKernel") for k in p.kernels):
+            status = "INVALID"
+            c.warn("INVALID: no MarlinLinearKernel line in the vLLM log, so W4A8 is not proven (score shown anyway)")
+        if baseline:
+            name, base_metrics = baseline
+            mine = parsers.primary(metrics)
+            for task, bm in parsers.primary(base_metrics).items():
+                if m := mine.get(task):
+                    delta, rec = report.vs_baseline(m, bm)
+                    c.kv(f"vs {name}", f"{m.label} {bm.value:.3f} → {m.value:.3f} · {delta} · recovery {rec}")
+        c.done(s.clock() - t0)
+        return EvalResult(status, metrics)
+    except BaseException:
         shutil.rmtree(tmp, ignore_errors=True)
-        reason = failure_reason(code, tail, None) if code != 0 else "lm_eval finished without results_*.json"
-        c.failed(reason)
-        c.line(f"  log: {s.rd / 'logs' / f'{job.label}.eval.log'}")
-        return EvalResult("FAILED", reason=reason)
-    raw = json.loads(path.read_text())
-    c.kv("lm_eval", f"{p.prompts_done}/{p.prompts_total} prompts")
-    for line in p.table:
-        c.line("  " + line)
-    metrics = parsers.metrics_from(raw["results"])
-    save_task_results(s.rd, job.label, raw, tasks, meta_for)
-    raw_dir = s.rd / "results" / "raw" / job.label
-    shutil.rmtree(raw_dir, ignore_errors=True)
-    raw_dir.parent.mkdir(parents=True, exist_ok=True)
-    tmp.rename(raw_dir)
-    status = "OK"
-    if job.expect_marlin and not any(k.startswith("MarlinLinearKernel") for k in p.kernels):
-        status = "INVALID"
-        c.warn("INVALID: no MarlinLinearKernel line in the vLLM log, so W4A8 is not proven (score shown anyway)")
-    if baseline:
-        name, base_metrics = baseline
-        mine = parsers.primary(metrics)
-        for task, bm in parsers.primary(base_metrics).items():
-            if m := mine.get(task):
-                delta, rec = report.vs_baseline(m, bm)
-                c.kv(f"vs {name}", f"{m.label} {bm.value:.3f} → {m.value:.3f} · {delta} · recovery {rec}")
-    c.done(s.clock() - t0)
-    return EvalResult(status, metrics)
+        raise
 
 
 def baseline_row(s: Session, label: str, model: str, title: str, tasks: list[str], limit: int | None, mode: str,
@@ -408,6 +421,8 @@ def run_quantize(s: Session, r: QuantizeRun) -> int:
     ok, sizes, failed, abort = {}, {}, False, False
     for st in r.states:
         path = s.rd / "checkpoints" / st.name
+        if st.action == "stale":
+            raise ValueError(f"checkpoint {st.name} is stale; refuse before calling run_quantize")
         if st.action == "reuse":
             ok[st.name], sizes[st.name] = True, dir_bytes(path)
             continue
@@ -435,7 +450,11 @@ def run_quantize(s: Session, r: QuantizeRun) -> int:
     rows = [baseline_row(s, "bf16", r.model, "bf16 baseline", r.tasks, r.limit, r.mode,
                          r.params * 2 if r.params else None)]
     base = ("bf16", [m for m in rows[0].metrics.values()]) if rows[0].status == "OK" else None
+    if rows[0].status == "FAILED":
+        failed = True
     for name in r.schemes:
+        if failed and r.on_error == "stop":
+            break
         sc = schemes.SCHEMES[name]
         if sc.checkpoint and not ok.get(sc.checkpoint):
             rows.append(report.Row(name, "SKIPPED", note=f"{sc.checkpoint} failed"))

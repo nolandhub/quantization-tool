@@ -206,3 +206,62 @@ def test_quantization_text():
 def test_label_for():
     assert flow.label_for("/x/runs/m/checkpoints/INT4-W4A16", "int8", None) == "INT4-W4A16+act-int8"
     assert flow.label_for("Qwen/Qwen3.5-4B", None, "fp8") == "Qwen3.5-4B+fp8-online"
+
+
+def test_ctrl_c_during_eval_removes_eval_tmp(setup):
+    s, docker, out = setup
+
+    def interrupted_eval(spec, log_path, on_line, on_tick=None):
+        if spec.command[0] != "lm_eval":
+            return docker(spec, log_path, on_line, on_tick)
+        on_line("starting")
+        raise KeyboardInterrupt
+
+    s.run = interrupted_eval
+    with pytest.raises(KeyboardInterrupt):
+        flow.run_quantize(s, quantize_run(s, ["int4-w4a16"]))
+    assert s.current == "[4/4] Evaluating bf16 baseline"
+    assert not list(s.rd.rglob(".tmp-*"))
+
+
+@pytest.mark.parametrize("on_error", ["continue", "stop"])
+def test_failed_baseline_counts_as_failure(setup, on_error):
+    s, docker, out = setup
+    docker.evals["bf16"] = ("lm_eval/eval-bf16-docs.err-mamba.log", None, 1)
+    code = flow.run_quantize(s, quantize_run(s, ["int4-w4a16"], on_error=on_error))
+    assert code == 1
+    evals = [sp for sp in docker.specs if sp.command[0] == "lm_eval"]
+    assert len(evals) == (1 if on_error == "stop" else 2)
+
+
+def test_quantize_without_saved_event_is_a_failure(setup):
+    s, docker, out = setup
+    docker.quantize["INT4-W4A16"] = "no-saved"
+    code = flow.run_quantize(s, quantize_run(s, ["int4-w4a16", "int4-w4a8-fp8", "int8-w8a8"]))
+    text = out.getvalue()
+    assert code == 1
+    assert "quantize finished without a saved event" in text
+    assert not (s.rd / "checkpoints" / "INT4-W4A16").exists()
+    assert not list(s.rd.rglob(".tmp-*"))
+    assert "  int4-w4a8-fp8   SKIPPED" in text
+
+
+def test_stale_state_is_refused(setup):
+    s, docker, out = setup
+    r = quantize_run(s, ["int4-w4a16"])
+    r.states[0].action = "stale"
+    with pytest.raises(ValueError, match="checkpoint INT4-W4A16 is stale"):
+        flow.run_quantize(s, r)
+
+
+def test_unreadable_results_json_fails_the_scheme(setup, tmp_path):
+    s, docker, out = setup
+    bad = tmp_path / "bad"
+    bad.mkdir()
+    (bad / "results_x.json").write_text("{not json")
+    docker.evals["int8-w8a8"] = ("lm_eval/eval-w8a8.log", bad, 0)
+    assert flow.run_quantize(s, quantize_run(s, ["int8-w8a8"])) == 1
+    text = out.getvalue()
+    assert "unreadable lm_eval results: JSONDecodeError" in text
+    assert "  int8-w8a8       FAILED" in text
+    assert not list(s.rd.rglob(".tmp-*"))

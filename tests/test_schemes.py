@@ -24,7 +24,14 @@ def test_checkpoints_are_shared_and_fp8_has_none():
     assert got == {"INT4-W4A16": ["int4-w4a8-fp8", "int4-w4a16"], "INT8-W8A8": ["int8-w8a8"]}
 
 
-@pytest.mark.parametrize("cc,col", [("7.0", "7.0"), ("6.1", "7.0"), ("7.5", "7.5"), ("8.0", "8.x"), ("8.6", "8.x"),
+def test_int4_recipe_records_dampening():
+    # The recipe text is part of the checkpoint signature: INT4 checkpoints made with llmcompressor's default
+    # dampening (0.01) go stale. 0.05 matched RedHat on gsm8k (docs/spike/2026-11-01-acceptance-followup.md).
+    assert "dampening_frac=0.05" in schemes.CHECKPOINTS["INT4-W4A16"]["recipe"]
+    assert "dampening_frac" not in schemes.CHECKPOINTS["INT8-W8A8"]["recipe"]
+
+
+@pytest.mark.parametrize("cc,col",[("7.0", "7.0"), ("6.1", "7.0"), ("7.5", "7.5"), ("8.0", "8.x"), ("8.6", "8.x"),
                                     ("8.9", "8.9"), ("9.0", "9.0"), ("10.0", "10.x"), ("12.0", "12.x")])
 def test_sm_column(cc, col):
     assert schemes.sm_column(cc) == col

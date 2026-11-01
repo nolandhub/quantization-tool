@@ -50,6 +50,7 @@ def test_w4a16_phi3_float32_compute_casts_back(capsys, tiny_dir, calib_jsonl, tm
     assert e["saved"]["cast_tensors"] > 0
     meta = json.loads((out / "qtool.json").read_text())
     assert meta["signature"]["checkpoint"] == "INT4-W4A16" and meta["versions"]["llmcompressor"] == "0.13.0"
+    assert "dampening_frac: 0.05" in (out / "recipe.yaml").read_text()
 
 
 def test_calib_cache_is_reused(capsys, tiny_dir, calib_jsonl, tmp_path):
@@ -60,6 +61,7 @@ def test_calib_cache_is_reused(capsys, tiny_dir, calib_jsonl, tmp_path):
     assert by_name(evs)["calib"]["cached"] is True
     cfg = json.loads((tmp_path / "b" / "config.json").read_text())
     assert cfg["quantization_config"]["format"] == "int-quantized"
+    assert "dampening_frac: 0.01" in (tmp_path / "b" / "recipe.yaml").read_text()
 
 
 def test_w8a8_olmoe_linearizes_experts(capsys, tiny_dir, calib_jsonl, tmp_path):

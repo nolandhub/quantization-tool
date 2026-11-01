@@ -22,7 +22,7 @@ SCHEMES = {s.name: s for s in [
 
 # llmcompressor preset per checkpoint and how many sequential passes oneshot makes (SmoothQuant adds one)
 CHECKPOINTS = {
-    "INT4-W4A16": {"preset": "W4A16", "recipe": "GPTQModifier targets=Linear scheme=W4A16", "passes": 1},
+    "INT4-W4A16": {"preset": "W4A16", "recipe": "GPTQModifier targets=Linear scheme=W4A16 dampening_frac=0.05", "passes": 1},
     "INT8-W8A8": {"preset": "W8A8", "passes": 2,
                   "recipe": "SmoothQuantModifier smoothing_strength=0.8 + GPTQModifier targets=Linear scheme=W8A8"},
 }

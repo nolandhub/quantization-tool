@@ -13,6 +13,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from recipe import derive, is_multimodal, loader_name, orig_dtype, remote_code_required, render_calib  # noqa: E402
 
 PRESETS = {"INT4-W4A16": "W4A16", "INT8-W8A8": "W8A8"}
+# GPTQ dampening: 0.05 for W4A16 matched RedHat on gsm8k (docs/spike/2026-11-01-acceptance-followup.md);
+# W8A8 keeps llmcompressor's default 0.01 (no evidence either way)
+DAMPENING = {"W4A16": 0.05, "W8A8": 0.01}
 EXIT_REFUSED = 3
 SIDE_FILES = (".json", ".jinja", ".txt", ".model")
 
@@ -186,7 +189,7 @@ def main(argv=None) -> int:
     from llmcompressor.modifiers.transform import SmoothQuantModifier
 
     preset = PRESETS[a.checkpoint]
-    gptq = GPTQModifier(targets="Linear", scheme=preset, ignore=r["ignore"])
+    gptq = GPTQModifier(targets="Linear", scheme=preset, ignore=r["ignore"], dampening_frac=DAMPENING[preset])
     recipe = [SmoothQuantModifier(smoothing_strength=0.8), gptq] if preset == "W8A8" else gptq
     cuda = torch.cuda.is_available()
     if cuda:

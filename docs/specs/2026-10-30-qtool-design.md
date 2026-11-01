@@ -1,6 +1,6 @@
 # qtool — Design Spec
 
-Ngày: 2026-10-30 · Trạng thái: bản 3 (cập nhật theo spike 1 + 2, `docs/spike/2026-10-30-findings.md`), chờ Nhân duyệt · Repo: `~/ws-DoNhan/qtool` (local) · máy phát triển và kiểm chứng: `rtx4070:~/qtool` (RTX 4070 Ti SUPER, SM 8.9)
+Ngày: 2026-10-30 · Trạng thái: bản 3.1 (spike 1 + 2, `docs/spike/2026-10-30-findings.md`; 3.1 = chi tiết kiểm chứng lúc viết plan 2), Nhân đã duyệt v3 · Repo: `~/ws-DoNhan/qtool` (local) · máy phát triển và kiểm chứng: `rtx4070:~/qtool` (RTX 4070 Ti SUPER, SM 8.9)
 
 ## 1. Mục tiêu
 
@@ -89,7 +89,7 @@ Ghi chú:
 | SmoothQuant | mapping tự suy của llmcompressor |
 | Calib | render chat template, **kiểm nội dung tin nhắn còn trong text**; mất → thử `content=[{"type":"text",...}]`; vẫn mất / không có template → text thô. In dạng đã dùng + thống kê token |
 | `oneshot` | truyền tokenizer làm `processor=` (không khởi tạo processor đa phương thức — kéo gói phụ như `num2words`) |
-| Lưu | `save_pretrained(save_compressed=True)` + tokenizer + copy `*.json/*.jinja/*.txt/*.model` còn thiếu từ snapshot gốc; `text_config` có khoá `mtp` / `nextn` → `save_mtp_tensors_to_checkpoint` |
+| Lưu | `save_pretrained(save_compressed=True)` + tokenizer + copy `*.json/*.jinja/*.txt/*.model` còn thiếu từ snapshot gốc; `text_config` có khoá chứa `mtp` / `nextn` với giá trị > 0 → `save_mtp_tensors_to_checkpoint` |
 
 Kiến trúc đã kiểm chứng (recipe suy ra → checkpoint load được vLLM + Marlin):
 
@@ -147,7 +147,8 @@ required:
                            int8-w8a8, fp8-w8a8
 
 calibration (step 2):
-  --calib SOURCE           HF dataset id hoặc file .jsonl     [default: HuggingFaceH4/ultrachat_200k]
+  --calib SOURCE           HF dataset id[:split] hoặc file .jsonl; mỗi dòng có cột `messages` (chat) hoặc `text`
+                           [default: HuggingFaceH4/ultrachat_200k:train_sft]
   --calib-samples N        số mẫu                              [default: 512]
   --calib-seq-len N        số token tối đa mỗi mẫu             [default: 2048]
 
@@ -228,7 +229,12 @@ Container:
 
 - GPU: `docker run --gpus device=N` → container chỉ thấy đúng 1 GPU đã chọn (không thể bị rải sang card khác).
 - Mount: `--hf-cache` và thư mục runs vào cả 2 container; `HF_TOKEN` truyền qua nếu có.
-- `--user $(id -u):$(id -g)` → file checkpoint thuộc dev (spike: container ghi bằng root, safetensors mode 600, dev không đọc được).
+- Container chạy **root** (như các service khác; HF cache trên rtx4070 thuộc root nên `--user` không ghi được — smoke test 01/11).
+  Sau **mỗi** container (kể cả lỗi / Ctrl-C) tool chạy `docker run --rm --entrypoint chown <image> -R $(id -u):$(id -g) /runs /qtool-home`
+  → checkpoint, log, cache trong thư mục runs thuộc dev (spike: root + safetensors mode 600, dev không đọc được). Không đụng HF cache.
+- `HOME=/qtool-home` mount từ `<output-dir>/.home` → cache Triton / torch.compile / vLLM giữ giữa các lượt và thuộc dev.
+- Preflight chạy 1 container `probe.py` (image eval; `--no-eval` → image compress) để đọc metadata model và kiểm task lm_eval
+  (~30 s) — host không cần transformers / mạng HF.
 - Container compress chạy với `--memory` = RAM khả dụng lúc preflight − 2 GB: quantize vượt RAM thì container bị kill
   (exit 137, báo lỗi rõ), không kéo sập service khác trên host (spike: FP32 4B bị kill ở trần 24 GB).
 
@@ -244,12 +250,17 @@ qtool/
 │   ├── runner.py       docker run, stream dòng, log file, Ctrl-C, thư mục tạm
 │   ├── parsers.py      regex log llmcompressor / vLLM / lm_eval, đọc results.json, dòng @qtool
 │   ├── console.py      header bước, thời gian, định dạng
-│   └── report.py       bảng tổng hợp, Δ pp, recovery %, summary.json
+│   ├── report.py       bảng tổng hợp, Δ pp, recovery %, summary.json
+│   ├── images.py       tag image = hash Dockerfile, chọn cu126/cu129, build khi thiếu
+│   └── flow.py         điều phối quantize / eval: header bước, render sự kiện, --on-error
 ├── images/
 │   ├── compress/Dockerfile
-│   ├── compress/recipe.py     suy recipe chung (load class, linearize MoE, ignore, layer tuần tự, MTP, calib template)
-│   ├── compress/quantize.py   chạy trong container: load → calib → oneshot → save
-│   └── eval/Dockerfile
+│   ├── eval/Dockerfile
+│   └── scripts/               mount read-only vào /qtool của cả 2 container (sửa script không phải build lại image)
+│       ├── recipe.py          suy recipe chung (load class, linearize MoE, ignore, layer tuần tự, MTP, calib template)
+│       ├── quantize.py        container compress: load → calib → oneshot → save
+│       └── probe.py           preflight: metadata model (config, số tham số, remote code, đã quantize, chat template), task lm_eval
+├── bin/qtool           shim chạy `python3 -m qtool` từ repo (không cần pip install)
 ├── tests/
 ├── docs/specs/
 ├── sync.sh             rsync local ↔ rtx4070:~/qtool
@@ -261,7 +272,7 @@ qtool/
 | Loại                                                                                                                    | Cách lấy                                                            |
 | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
 | Sự kiện của thư viện (tqdm llmcompressor, dòng GPTQ, dòng kernel vLLM, tiến trình lm_eval)                      | regex trên output gốc; regex viết từ fixture log thật của spike |
-| Sự kiện script mình đọc trong container (config.json, thống kê token calib, dung lượng checkpoint, VRAM đỉnh) | `quantize.py` in dòng `@qtool {json}`, host parse JSON           |
+| Sự kiện script mình đọc trong container (config.json, thống kê token calib, dung lượng checkpoint, VRAM đỉnh) | `quantize.py` / `probe.py` in `@qtool {json}`; host tìm `@qtool ` ở **bất kỳ đâu** trong dòng (tqdm viết `\r` không xuống dòng nên dòng có thể dính tiền tố) |
 | Kết quả eval                                                                                                           | `results.json` + file sample của lm_eval                           |
 | Thời gian, Δ pp, recovery %                                                                                            | host tự đo / tự tính từ số đã parse                           |
 
@@ -376,8 +387,8 @@ Phát hiện sớm nhất có thể; thông báo luôn trích dòng lỗi gốc 
 | Tình huống                                                                                           | Phát hiện                               | Xử lý                                                                                                        |
 | ------------------------------------------------------------------------------------------------------ | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | Không có Docker / GPU trong container                                                                | `docker info`, `nvidia-smi`           | báo lỗi                                                                                                      |
-| VRAM trống < ngưỡng: BF16 0.6 × size safetensors, FP32 1.0 × size (spike Q3, Q6)               | nvidia-smi                                | liệt kê PID / container / VRAM đang chiếm, dev tự dừng                                                   |
-| RAM khả dụng < ngưỡng: BF16 1.4 × size, FP32 3.5 × size (spike: 4B BF16 +10.8 GB, FP32 +28.6 GB) | `/proc/meminfo` `MemAvailable`          | báo số cần / số có; gợi ý GPU / máy khác                                                                   |
+| VRAM trống < ngưỡng: BF16 0.6 × size, FP32 1.0 × size (spike Q3, Q6). **size = số tham số × 2 byte** (đọc header safetensors; model lưu FP32 như SmolVLM2 không bị tính gấp đôi) | nvidia-smi                                | liệt kê PID / container / VRAM đang chiếm, dev tự dừng                                                   |
+| RAM khả dụng < ngưỡng: BF16 1.6 × size, FP32 3.5 × size (spike: Qwen 4B +1.2×, Phi-4-mini +1.6×, FP32 4B +28.6 GB) | `/proc/meminfo` `MemAvailable`          | báo số cần / số có; gợi ý GPU / máy khác                                                                   |
 | Weight model eval (baseline BF16 hoặc checkpoint) > `gpu_memory_utilization × VRAM` trừ dư KV / CUDA graph | size safetensors, nvidia-smi | bỏ lượt đó kèm lý do (`bf16 baseline does not fit: 13.8 GB weights > 13.6 GB budget`), Δ / recovery `n/a`; không để vLLM lỗi giữa chừng (spike Q9: OLMoE BF16 `No available memory for the cache blocks`) |
 | `quantize` với `trust_remote_code` bắt buộc (`auto_map` mà transformers không có class gốc)              | `config.json`                           | exit 2: chưa hỗ trợ model cần remote code                                                                    |
 | qtool khác đang chạy                                                                                | `.lock`                                 | `another qtool run (pid N) is active`                                                                        |

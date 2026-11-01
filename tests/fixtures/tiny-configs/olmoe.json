@@ -1,0 +1,50 @@
+{
+ "transformers_version": "5.14.1",
+ "architectures": [
+  "OlmoeForCausalLM"
+ ],
+ "output_hidden_states": false,
+ "return_dict": true,
+ "dtype": "bfloat16",
+ "chunk_size_feed_forward": 0,
+ "is_encoder_decoder": false,
+ "id2label": {
+  "0": "LABEL_0",
+  "1": "LABEL_1"
+ },
+ "label2id": {
+  "LABEL_0": 0,
+  "LABEL_1": 1
+ },
+ "problem_type": null,
+ "vocab_size": 512,
+ "hidden_size": 128,
+ "intermediate_size": 128,
+ "num_hidden_layers": 2,
+ "num_attention_heads": 4,
+ "num_key_value_heads": 4,
+ "hidden_act": "silu",
+ "max_position_embeddings": 4096,
+ "initializer_range": 0.02,
+ "rms_norm_eps": 1e-05,
+ "use_cache": false,
+ "pad_token_id": 1,
+ "bos_token_id": null,
+ "eos_token_id": 2,
+ "tie_word_embeddings": false,
+ "rope_parameters": {
+  "rope_theta": 10000.0,
+  "rope_type": "default"
+ },
+ "attention_bias": false,
+ "attention_dropout": 0.0,
+ "clip_qkv": null,
+ "num_experts_per_tok": 2,
+ "num_experts": 8,
+ "output_router_logits": false,
+ "router_aux_loss_coef": 0.01,
+ "norm_topk_prob": false,
+ "_name_or_path": "allenai/OLMoE-1B-7B-0125-Instruct",
+ "model_type": "olmoe",
+ "output_attentions": false
+}

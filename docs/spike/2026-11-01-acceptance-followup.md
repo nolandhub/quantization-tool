@@ -44,3 +44,22 @@ Tất cả lần quantize INT4-W4A16 (gsm8k full, strict-match; RedHat 0.8105):
   compressed-tensors 0.14.1.a20260325 (RedHat, bản nightly cũ hơn); `add_special_tokens` True (qtool, mode text) vs False;
   thứ tự mẫu calib; GPU. RedHat có thể cũng là một lần rút thăm may (không biết họ chạy mấy lần).
 - Checkpoint: `rtx4070:~/qtool-exp/rh{1,2,3}`; raw INT4 0.01 cũ: `~/qtool-exp/raw-INT4-W4A16-damp001`.
+
+## Script RedHat chạy trong image qtool (2026-11-02)
+
+Script tạo model trên model card RedHat, chạy nguyên văn trong `qtool-compress:cu129-4d4b1be4056f` (llmcompressor 0.13.0);
+sửa duy nhất: `sequential_targets` chuyển từ `GPTQModifier` sang `oneshot()` (0.13 báo `extra_forbidden`, tức RedHat dùng
+API cũ hơn). Eval bằng `qtool eval`, so cặp với RedHat (strict-match 0.8105).
+
+| Lần | strict | vs RedHat (McNemar) |
+|---|---|---|
+| script RedHat #1 | 0.8089 | 66/68, p = 0.93 |
+| script RedHat #2 | 0.7953 | 61/81, p = 0.11 |
+
+- Dữ liệu calib qtool (`--calib platypus1024.jsonl --calib-samples 1024 --calib-seq-len 8192`) và của script RedHat
+  **trùng từng token, cùng thứ tự** (1024 mẫu, 76 976 token); `add_special_tokens` không thêm token nào với tokenizer Qwen3.5.
+  Recipe, ignore, dampening cũng trùng. Khác còn lại không ảnh hưởng số học: qtool truyền `processor=tok` và `dtype` tường minh.
+- 5 lần cùng input (qtool ×3 + script ×2): 0.7718, 0.7794, 0.7953, 0.7953, 0.8089, trung bình 0.790. RedHat 0.8105 nằm ở
+  đỉnh dải và script #1 đạt lại được trên llmcompressor 0.13: **không cần giả thuyết version thư viện**.
+- Kết luận: qtool không có lỗi chất lượng; khoảng cách là dao động GPTQ giữa các lần (~±2 pp gsm8k), checkpoint RedHat là
+  một lần rút thăm tốt. Acceptance cần tiêu chí tính đến dao động này.

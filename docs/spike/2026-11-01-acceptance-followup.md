@@ -16,3 +16,31 @@ so cặp từng câu bằng McNemar chính xác. Eval full tất định (RedHat
 - Bản 0.05 chạy từ bản sao có sửa 1 dòng (`~/qtool-exp/qtool-damp`), code repo **chưa** đổi. Checkpoint thí nghiệm:
   `rtx4070:~/qtool-exp/runs*/Qwen3.5-4B/checkpoints/INT4-W4A16`.
 - Đề xuất (Nhân quyết): đổi mặc định GPTQ `dampening_frac` thành 0.05 (khớp recipe RedHat), có test, rồi chạy lại acceptance.
+
+## Đính chính: GPTQ không tất định giữa các lần chạy (2026-11-01 tối)
+
+Kết luận "dampening 0.05 đóng khoảng cách" ở trên **sai**: dựa trên 1 lần quantize. Chạy lại acceptance bằng code repo
+(`9e370dd`, cùng calib cache sha256, cùng recipe.yaml, cùng version) ra checkpoint khác: 128/979 tensor lệch, mã int4 đổi
+0.08% ở layer 0 → 15.7% ở layer 27 (sai số GPU nhỏ ở Hessian lật phép làm tròn, lan qua quantize tuần tự từng layer).
+Eval vẫn tất định; nhiễu nằm ở bước quantize. Mỗi lần quantize là một lần rút thăm.
+
+Tất cả lần quantize INT4-W4A16 (gsm8k full, strict-match; RedHat 0.8105):
+
+| calib | dampening | strict | vs RedHat (McNemar) |
+|---|---|---|---|
+| ultrachat 512×2048, chat | 0.01 | 0.7870 | 99/68, p = 0.020 |
+| Open-Platypus 1024×8192, text | 0.01 | 0.7900 | 89/62, p = 0.034 |
+| ultrachat 512×2048, chat | 0.05 | 0.8059 | 84/78, p = 0.69 |
+| ultrachat 512×2048, chat | 0.05 | 0.7688 | 112/57, p < 0.001 |
+| Open-Platypus 1024×8192, text (recipe RedHat) | 0.05 | 0.7794 | 86/45, p < 0.001 |
+| Open-Platypus 1024×8192, text (recipe RedHat) | 0.05 | 0.7953 | 79/59, p = 0.105 |
+| Open-Platypus 1024×8192, text (recipe RedHat) | 0.05 | 0.7718 | 98/47, p < 0.001 |
+
+- Recipe RedHat ×3: trung bình 0.7822 (−2.8 pp), dải 0.772–0.795; cả 3 thấp hơn RedHat. 7 lần tổng: chỉ 1 lần chạm RedHat.
+- Dao động giữa các lần (~±1.5 pp) lớn hơn stderr eval (1.1 pp): tiêu chí "|Δ| ≤ stderr" trên 1 lần quantize không dùng được.
+- Chưa có bằng chứng 0.05 tốt hơn 0.01 (5 lần 0.05 trung bình 0.7842 vs 2 lần 0.01 trung bình 0.7885).
+- Config checkpoint so với RedHat: trùng (group 128, actorder static, symmetric, cùng tập ignore, cùng dampening, cùng
+  calib Platypus 1024 shuffle seed 42). Khác còn lại: llmcompressor 0.13.0 / compressed-tensors 0.18.0 (qtool) vs
+  compressed-tensors 0.14.1.a20260325 (RedHat, bản nightly cũ hơn); `add_special_tokens` True (qtool, mode text) vs False;
+  thứ tự mẫu calib; GPU. RedHat có thể cũng là một lần rút thăm may (không biết họ chạy mấy lần).
+- Checkpoint: `rtx4070:~/qtool-exp/rh{1,2,3}`; raw INT4 0.01 cũ: `~/qtool-exp/raw-INT4-W4A16-damp001`.

@@ -55,12 +55,34 @@ def _rows(text: str) -> list[list[str]]:
 
 
 def parse_gpus(text: str) -> list[Gpu]:
-    return [Gpu(int(r[0]), r[1], r[2], int(r[3]), int(r[4]), int(r[5])) for r in _rows(text)]
+    gpus = []
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        r = [c.strip() for c in line.split(",")]
+        try:
+            gpus.append(Gpu(int(r[0]), r[1], r[2], int(r[3]), int(r[4]), int(r[5])))
+        except (IndexError, ValueError):  # nvidia-smi prints [N/A] / [Not Supported] on WSL and vGPU
+            raise PreflightError(f"cannot parse nvidia-smi GPU row: {line!r}") from None
+    return gpus
 
 
 def parse_apps(apps_text: str, uuid_text: str) -> list[GpuApp]:
     index_of = {r[1]: int(r[0]) for r in _rows(uuid_text)}
-    return [GpuApp(index_of.get(r[0], -1), int(r[1]), r[2], int(r[3])) for r in _rows(apps_text)]
+    apps = []
+    for r in _rows(apps_text):
+        if len(r) < 4:
+            continue
+        try:
+            pid = int(r[1])
+        except ValueError:
+            continue
+        try:
+            used = int(r[3])
+        except ValueError:  # memory unsupported on this GPU: keep the process, count it as 0 MiB
+            used = 0
+        apps.append(GpuApp(index_of.get(r[0], -1), pid, r[2], used))
+    return apps
 
 
 def query_gpus(run=subprocess.run) -> tuple[list[Gpu], list[GpuApp]]:
@@ -220,9 +242,10 @@ class RunLock:
 
     def _holder(self) -> int:
         try:
-            return int(self.path.read_text().strip() or 0)
+            pid = int(self.path.read_text().strip() or 0)
         except (OSError, ValueError):
             return 0
+        return pid if pid > 0 else 0  # os.kill(-1, 0) would signal every process: not a holder
 
     def acquire(self) -> None:
         pid = self._holder()

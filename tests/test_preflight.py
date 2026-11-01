@@ -30,6 +30,27 @@ def test_parse_apollo_maps_uuid_to_index(fixtures):
     assert pf.GpuApp(4, 2273897, "VLLM::EngineCore", 30706) in apps
 
 
+def test_parse_gpus_non_numeric_row_is_preflight_error():
+    row = "0, NVIDIA X, 8.9, [N/A], [N/A], [N/A]"
+    with pytest.raises(pf.PreflightError) as e:
+        pf.parse_gpus(row + "\n")
+    assert str(e.value) == f"cannot parse nvidia-smi GPU row: {row!r}"
+
+
+def test_parse_gpus_short_row_is_preflight_error():
+    with pytest.raises(pf.PreflightError, match=r"cannot parse nvidia-smi GPU row: '0, NVIDIA X, 8.9'"):
+        pf.parse_gpus("0, NVIDIA X, 8.9\n")
+
+
+def test_parse_apps_tolerates_unsupported_memory_and_skips_bad_rows():
+    uuid = "0, GPU-aaa\n"
+    apps = ("GPU-aaa, 123, python, [N/A]\n"  # memory unsupported: kept with 0 MiB
+            "GPU-aaa, [N/A], python, 5\n"    # pid unsupported: skipped
+            "GPU-aaa, 124\n"                 # too few columns: skipped
+            "GPU-aaa, 125, python, 64\n")
+    assert pf.parse_apps(apps, uuid) == [pf.GpuApp(0, 123, "python", 0), pf.GpuApp(0, 125, "python", 64)]
+
+
 def test_single_gpu_is_chosen_without_flag(fixtures):
     assert pf.select_gpu(gpus_of(fixtures, "rtx4070"), None).index == 0
 
@@ -160,3 +181,11 @@ def test_run_lock(tmp_path):
         pf.RunLock(path).acquire()
     path.write_text("999999999")  # dead PID: stale lock is taken over
     pf.RunLock(path).acquire()
+
+
+@pytest.mark.parametrize("content", ["-1", "0"])
+def test_run_lock_ignores_non_positive_pid(tmp_path, content):
+    path = tmp_path / ".lock"
+    path.write_text(content)  # os.kill(-1, 0) would signal every process: never a holder
+    pf.RunLock(path).acquire()
+    assert path.read_text() == str(os.getpid())

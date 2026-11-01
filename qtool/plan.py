@@ -55,7 +55,12 @@ def checkpoint_states(rd: Path, needed: dict[str, list[str]], wanted: dict[str, 
         elif force:
             out.append(CheckpointState(name, users, "rebuild", []))
         else:
-            d = diff(json.loads(meta.read_text()).get("signature", {}), wanted[name])
+            try:
+                saved = json.loads(meta.read_text()).get("signature", {})
+            except (OSError, json.JSONDecodeError) as e:
+                out.append(CheckpointState(name, users, "stale", [f"qtool.json unreadable: {type(e).__name__}"]))
+                continue
+            d = diff(saved, wanted[name])
             out.append(CheckpointState(name, users, "stale" if d else "reuse", d))
     return out
 
@@ -75,7 +80,11 @@ def cached_result(path: Path, wanted: dict) -> tuple[bool, str]:
     """(valid, reason) for a cached per-task result file written by flow.save_task_results."""
     if not path.exists():
         return False, "cache: none, will run"
-    d = diff(json.loads(path.read_text()).get("qtool", {}), wanted, EVAL_FIELDS)
+    try:
+        saved = json.loads(path.read_text()).get("qtool", {})
+    except (OSError, json.JSONDecodeError):
+        return False, "cache unreadable, will run"
+    d = diff(saved, wanted, EVAL_FIELDS)
     if d:
         return False, "cache stale: " + "; ".join(d) + ", will run"
     return True, "cache: valid, reused"

@@ -36,6 +36,24 @@ def test_checkpoint_states(tmp_path):
     assert plan.checkpoint_states(rd, {"INT8-W8A8": ["int8-w8a8"]}, wanted, force=True)[0].action == "rebuild"
 
 
+def test_checkpoint_states_unreadable_meta(tmp_path):
+    rd = tmp_path / "m"
+    d = rd / "checkpoints" / "INT4-W4A16"
+    d.mkdir(parents=True)
+    (d / "qtool.json").write_text("{truncated")
+    needed, wanted = {"INT4-W4A16": ["int4-w4a16"]}, {"INT4-W4A16": sig()}
+    states = plan.checkpoint_states(rd, needed, wanted, force=False)
+    assert [(s.action, s.diff) for s in states] == [("stale", ["qtool.json unreadable: JSONDecodeError"])]
+    assert [s.action for s in plan.checkpoint_states(rd, needed, wanted, force=True)] == ["rebuild"]
+
+
+def test_checkpoint_states_meta_is_directory(tmp_path):
+    rd = tmp_path / "m"
+    (rd / "checkpoints" / "INT4-W4A16" / "qtool.json").mkdir(parents=True)
+    states = plan.checkpoint_states(rd, {"INT4-W4A16": ["int4-w4a16"]}, {"INT4-W4A16": sig()}, force=False)
+    assert [(s.action, s.diff) for s in states] == [("stale", ["qtool.json unreadable: IsADirectoryError"])]
+
+
 def test_cached_result(tmp_path):
     p = tmp_path / "bf16_gsm8k.json"
     wanted = plan.eval_meta("Qwen/Qwen3.5-4B", "gsm8k", None, "qtool-eval:abc", "chat", "RTX 4070")
@@ -44,6 +62,13 @@ def test_cached_result(tmp_path):
     assert plan.cached_result(p, wanted) == (False, "cache stale: eval-limit: 250 → full, will run")
     p.write_text(json.dumps({"qtool": wanted}))
     assert plan.cached_result(p, wanted) == (True, "cache: valid, reused")
+
+
+def test_cached_result_unreadable(tmp_path):
+    p = tmp_path / "bf16_gsm8k.json"
+    p.write_text("{truncated")
+    wanted = plan.eval_meta("Qwen/Qwen3.5-4B", "gsm8k", None, "qtool-eval:abc", "chat", "RTX 4070")
+    assert plan.cached_result(p, wanted) == (False, "cache unreadable, will run")
 
 
 def test_calib_key_is_stable_and_sensitive():

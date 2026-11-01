@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 REMOTE=${QTOOL_REMOTE:-rtx4070:qtool/}
-EXCL=(--exclude .venv --exclude __pycache__ --exclude .pytest_cache)
+EXCL=(--exclude .venv --exclude __pycache__ --exclude .pytest_cache --exclude /runs --exclude /.lock)
 case "${1:-}" in
   push) rsync -a --delete "${EXCL[@]}" ./ "$REMOTE" ;;
   pull) rsync -a "${EXCL[@]}" --exclude .git "$REMOTE" ./ ;;

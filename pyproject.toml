@@ -1,0 +1,20 @@
+[project]
+name = "qtool"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not gpu and not container' -p no:cacheprovider"
+markers = [
+    "container: runs inside the qtool-compress image (scripts/test-container.sh)",
+    "gpu: needs a GPU, Docker images and HF models; run by hand on rtx4070",
+]
+filterwarnings = [
+    "error",
+    "ignore:`torch.jit.script_method` is deprecated:DeprecationWarning",
+]

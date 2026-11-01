@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+# ABOUTME: Shim that runs qtool straight from the repo checkout (symlink it into ~/.local/bin).
+# ABOUTME: Puts the repo root on sys.path, then calls qtool.cli.main.
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+from qtool.cli import main  # noqa: E402
+
+sys.exit(main())

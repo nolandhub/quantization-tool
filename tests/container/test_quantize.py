@@ -47,6 +47,7 @@ def test_w4a16_phi3_float32_compute_casts_back(capsys, tiny_dir, calib_jsonl, tm
     cfg = json.loads((out / "config.json").read_text())
     assert cfg["dtype"] == "bfloat16" and cfg["quantization_config"]["format"] == "pack-quantized"
     assert tensor_dtypes(out) and "F32" not in tensor_dtypes(out)
+    assert e["saved"]["cast_tensors"] > 0
     meta = json.loads((out / "qtool.json").read_text())
     assert meta["signature"]["checkpoint"] == "INT4-W4A16" and meta["versions"]["llmcompressor"] == "0.13.0"
 
@@ -113,3 +114,23 @@ def test_null_quantization_config_is_not_refused(capsys, tiny_dir, calib_jsonl, 
     (src / "config.json").write_text(json.dumps(cfg))
     code, _ = run(capsys, src, tmp_path / "out", calib_jsonl, tmp_path / "calib")
     assert code == 0
+
+
+def test_cast_saved_tensors_converts_only_float32(tmp_path):
+    import torch
+    from quantize import cast_saved_tensors
+    from safetensors import safe_open
+    from safetensors.torch import save_file
+
+    path = tmp_path / "model.safetensors"
+    save_file({"a": torch.ones(2, dtype=torch.float32), "b": torch.ones(2, dtype=torch.int32),
+               "c": torch.ones(2, dtype=torch.bfloat16)}, path, metadata={"format": "pt", "k": "v"})
+    (tmp_path / "config.json").write_text(json.dumps(
+        {"dtype": "float32", "text_config": {"dtype": "float32"}, "other": 1}))
+    assert cast_saved_tensors(tmp_path, "bfloat16") == 1
+    with safe_open(path, "pt") as f:
+        assert {k: str(f.get_tensor(k).dtype) for k in f.keys()} == {
+            "a": "torch.bfloat16", "b": "torch.int32", "c": "torch.bfloat16"}
+        assert f.metadata() == {"format": "pt", "k": "v"}
+    cfg = json.loads((tmp_path / "config.json").read_text())
+    assert cfg["dtype"] == "bfloat16" and cfg["text_config"]["dtype"] == "bfloat16" and cfg["other"] == 1

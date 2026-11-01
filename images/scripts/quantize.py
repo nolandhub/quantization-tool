@@ -98,6 +98,44 @@ def dir_bytes(path: Path) -> int:
     return sum(p.stat().st_size for p in path.rglob("*") if p.is_file())
 
 
+def cast_saved_tensors(out: Path, dtype: str) -> int:
+    """Rewrite float32 tensors in out/*.safetensors as `dtype` (spike Q6); returns how many were converted.
+
+    Done on the saved files because llmcompressor's dispatch/offload defeats an in-memory model.to() on GPU.
+    """
+    import torch
+    from safetensors import safe_open
+    from safetensors.torch import load_file, save_file
+
+    target, converted, total_size = getattr(torch, dtype), 0, 0
+    for path in sorted(out.glob("*.safetensors")):
+        with safe_open(path, "pt") as f:
+            metadata = f.metadata() or {"format": "pt"}
+        tensors = load_file(path)
+        for k, t in tensors.items():
+            if t.dtype == torch.float32:
+                tensors[k] = t.to(target)
+                converted += 1
+        save_file(tensors, path, metadata=metadata)
+        total_size += sum(t.nbytes for t in tensors.values())
+
+    cfg_path = out / "config.json"
+    cfg = json.loads(cfg_path.read_text())
+    for c in (cfg, cfg.get("text_config")):
+        if isinstance(c, dict):
+            for key in ("dtype", "torch_dtype"):
+                if key in c:
+                    c[key] = dtype
+    cfg_path.write_text(json.dumps(cfg, indent=2))
+
+    index_path = out / "model.safetensors.index.json"
+    if index_path.exists():
+        index = json.loads(index_path.read_text())
+        index.setdefault("metadata", {})["total_size"] = total_size
+        index_path.write_text(json.dumps(index, indent=2))
+    return converted
+
+
 def main(argv=None) -> int:
     a = parse_args(argv)
     import torch
@@ -159,13 +197,13 @@ def main(argv=None) -> int:
     oneshot_seconds = round(time.time() - t0, 1)
     emit("oneshot", seconds=oneshot_seconds, peak_gpu_bytes=torch.cuda.max_memory_allocated() if cuda else None)
 
-    cast = None
+    cast, cast_tensors = None, 0
     orig = orig_dtype(cfg)
-    if orig in ("bfloat16", "float16") and orig != a.compute_dtype:
-        model.to(getattr(torch, orig))  # float32 compute: store unquantized tensors in the source dtype (spike Q6)
-        cast = f"{a.compute_dtype}->{orig}"
     out = Path(a.out)
     model.save_pretrained(out, save_compressed=True)
+    if orig in ("bfloat16", "float16") and orig != a.compute_dtype:
+        cast = f"{a.compute_dtype}->{orig}"  # float32 compute: store unquantized tensors in the source dtype (Q6)
+        cast_tensors = cast_saved_tensors(out, orig)
     tok.save_pretrained(out)
     copied = copy_side_files(a.model, out)
     if r["mtp"]:
@@ -182,7 +220,7 @@ def main(argv=None) -> int:
         "versions": {"llmcompressor": llmcompressor.__version__, "transformers": transformers.__version__,
                      "torch": torch.__version__, "compressed_tensors": compressed_tensors.__version__},
     }, indent=1))
-    emit("saved", path=str(out), bytes=dir_bytes(out), cast=cast, mtp=r["mtp"], copied=copied)
+    emit("saved", path=str(out), bytes=dir_bytes(out), cast=cast, cast_tensors=cast_tensors, mtp=r["mtp"], copied=copied)
     return 0
 
 

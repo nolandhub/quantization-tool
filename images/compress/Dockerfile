@@ -6,3 +6,5 @@ ARG CUDA=cu129
 RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir torch==2.13.0 torchvision --index-url https://download.pytorch.org/whl/${CUDA} && \
     pip install --no-cache-dir llmcompressor==0.13.0 transformers==5.14.1 datasets
+# Container-tier tests (scripts/test-container.sh) run inside this image
+RUN pip install --no-cache-dir pytest==9.2.0

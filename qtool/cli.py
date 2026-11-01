@@ -102,7 +102,15 @@ class System:
         return None if r.returncode == 0 else f"docker is not usable: {(r.stderr or r.stdout).strip()}"
 
     def gpus(self):
-        return preflight.query_gpus()
+        try:
+            return preflight.query_gpus()
+        except FileNotFoundError:
+            raise preflight.PreflightError("nvidia-smi not found: no NVIDIA driver on this host") from None
+
+    def gpu_error(self, image: str, index: int) -> str | None:
+        r = subprocess.run(["docker", "run", "--rm", "--gpus", f"device={index}", "--entrypoint", "nvidia-smi", image, "-L"],
+                           capture_output=True, text=True)
+        return None if r.returncode == 0 else f"containers cannot see GPU {index}: {(r.stderr or r.stdout).strip()}"
 
     def container_names(self) -> dict[str, str]:
         r = subprocess.run(["docker", "ps", "--no-trunc", "--format", "{{.ID}} {{.Names}}"], capture_output=True, text=True)
@@ -139,9 +147,9 @@ def _gpu(args, system: System, console: Console) -> preflight.Gpu:
         raise preflight.PreflightError(err)
     gpus, apps = system.gpus()
     names = system.container_names()
-    gpu = preflight.select_gpu(gpus, args.gpu, apps)
+    gpu = preflight.select_gpu(gpus, args.gpu, apps, lambda a: preflight.process_label(a, names))
     console.line(f"qtool {__version__} · {time.strftime('%Y-%m-%d %H:%M:%S')} · {gpu.name} "
-                 f"{gpu.total_mib / 1024:.0f} GB SM {gpu.cc}")
+                 f"{gpu.total_mib / 1024:.0f} GiB SM {gpu.cc}")
     busy = [a for a in apps if a.gpu_index == gpu.index]
     if busy:
         console.line("[preflight] in use on this GPU: " + ", ".join(
@@ -170,6 +178,16 @@ def _report(console: Console, findings: list[preflight.Finding]) -> bool:
     return any(f.level == "error" for f in findings)
 
 
+def _new(findings: list[preflight.Finding], seen: list[preflight.Finding]) -> list[preflight.Finding]:
+    """Findings not already reported (the GPU-only checks run before the probe, then again with it)."""
+    return [f for f in findings if f not in seen]
+
+
+def _ensure_gpu_visible(system: System, image: str, gpu: preflight.Gpu) -> None:
+    if err := system.gpu_error(image, gpu.index):
+        raise preflight.PreflightError(err)
+
+
 def cmd_quantize(args, system: System, console: Console) -> int:
     try:
         names = schemes.parse_schemes(args.scheme)
@@ -188,10 +206,19 @@ def cmd_quantize(args, system: System, console: Console) -> int:
     sigs = {c: plan.checkpoint_signature(args.model, c, args.calib, args.calib_samples, args.calib_seq_len, ignore, llmc)
             for c in needed}
     states = plan.checkpoint_states(rd, needed, sigs, args.force)
+    early = preflight.check_quantize(gpu, None, dtype, 0, names, args.no_eval, thresholds=False)
+    blocked = _report(console, early)
     if args.dry_run:
         for line in plan.render_plan(args.model, states, names, tasks, args.eval_limit, "cache not checked in --dry-run",
                                      args.no_eval):
             console.line(line)
+    if stale := [st for st in states if st.action == "stale"]:
+        for st in stale:
+            console.line(f"error: checkpoints/{st.name} was made with different settings: " + "; ".join(st.diff))
+        console.line("re-run with --force to rebuild it")
+    if blocked or stale:
+        return 2
+    if args.dry_run:
         return 0
     lock = preflight.RunLock(system.lock_path)
     lock.acquire()
@@ -201,13 +228,14 @@ def cmd_quantize(args, system: System, console: Console) -> int:
             d.mkdir(parents=True, exist_ok=True)
         compress = system.ensure_image("compress", images.compress_cuda(gpu.cc), console)
         evali = None if args.no_eval else system.ensure_image("eval", None, console)
+        _ensure_gpu_visible(system, compress, gpu)
         s = flow.Session(console, gpu, rd, Path(args.hf_cache).expanduser(), output / ".home", system.user(), compress,
                          evali, run=system.run, chown=system.chown, clock=system.clock)
         s.started = s.clock()
         info = flow.probe(s, evali or compress, args.model, [] if args.no_eval else tasks)
         ram = preflight.mem_available_bytes(system.meminfo())
-        findings = probe_findings(info, True, args.no_eval) + preflight.check_quantize(
-            gpu, info["params"], dtype, ram, names, args.no_eval, thresholds=not args.skip_preflight)
+        findings = probe_findings(info, True, args.no_eval) + _new(preflight.check_quantize(
+            gpu, info["params"], dtype, ram, names, args.no_eval, thresholds=not args.skip_preflight), early)
         if not args.no_eval and not args.skip_preflight:
             findings += preflight.check_eval_free(gpu)
         need = preflight.quantize_needs(info["params"], dtype) if info["params"] else None
@@ -227,11 +255,6 @@ def cmd_quantize(args, system: System, console: Console) -> int:
         console.line("")
         for line in plan.render_plan(args.model, states, names, tasks, args.eval_limit, note, args.no_eval):
             console.line(line)
-        if stale := [st for st in states if st.action == "stale"]:
-            for st in stale:
-                console.line(f"error: checkpoints/{st.name} was made with different settings: " + "; ".join(st.diff))
-            console.line("re-run with --force to rebuild it")
-            return 2
         options = flow.QuantizeOptions(args.model, args.calib, args.calib_samples, args.calib_seq_len, ignore, dtype,
                                        info["params"] * 2 if info["params"] else None)
         run = flow.QuantizeRun(args.model, names, states, sigs, options, info["params"], tasks, args.eval_limit,
@@ -253,11 +276,19 @@ def cmd_eval(args, system: System, console: Console) -> int:
     rd = plan.runs_dir(output, args.model)
     gpu = _gpu(args, system, console)
     label = flow.label_for(args.model, args.act, args.quantization)
+    rows = ["int4-w4a8-" + args.act] if args.act else (["fp8-w8a8"] if args.quantization else [])
+    early = preflight.check_eval_sm(gpu, rows, baseline=bool(args.baseline))
+    if args.act:
+        early += [f for f in preflight.check_act(gpu, None) if f.message.startswith("--act needs SM")]
+    blocked = _report(console, early)
     if args.dry_run:
         console.line(f"Plan for eval of {args.model}")
         if args.baseline:
             console.line(f"  eval      baseline {args.baseline} (cache not checked in --dry-run)")
         console.line(f"  eval      {label}   tasks: {','.join(tasks)} ({args.eval_limit or 'full'})")
+    if blocked:
+        return 2
+    if args.dry_run:
         return 0
     lock = preflight.RunLock(system.lock_path)
     lock.acquire()
@@ -266,15 +297,15 @@ def cmd_eval(args, system: System, console: Console) -> int:
         for d in (rd / "logs", output / ".home"):
             d.mkdir(parents=True, exist_ok=True)
         evali = system.ensure_image("eval", None, console)
+        _ensure_gpu_visible(system, evali, gpu)
         s = flow.Session(console, gpu, rd, Path(args.hf_cache).expanduser(), output / ".home", system.user(), None, evali,
                          run=system.run, chown=system.chown, clock=system.clock)
         s.started = s.clock()
         info = flow.probe(s, evali, args.model, tasks)
         binfo = flow.probe(s, evali, args.baseline) if args.baseline else None
-        rows = ["int4-w4a8-" + args.act] if args.act else (["fp8-w8a8"] if args.quantization else [])
-        findings = probe_findings(info, False) + preflight.check_eval_sm(gpu, rows, baseline=bool(args.baseline))
+        findings = probe_findings(info, False)
         if args.act:
-            findings += preflight.check_act(gpu, info["quantization_config"])
+            findings += _new(preflight.check_act(gpu, info["quantization_config"]), early)
         if not args.skip_preflight:
             findings += preflight.check_eval_free(gpu)
         mode = "chat" if info["chat_mode"] == "chat" and (binfo is None or binfo["chat_mode"] == "chat") else "completion"
@@ -293,7 +324,9 @@ def cmd_eval(args, system: System, console: Console) -> int:
         rowinfo = [("model", args.model), ("quantization", qtext)]
         if env:
             rowinfo.append(("runtime env", " ".join(f"{k}={v}" for k, v in env.items())))
-        bbytes = binfo["params"] * 2 if binfo and binfo["params"] else None
+        bbytes = None
+        if binfo:
+            bbytes = binfo["weight_bytes"] if binfo["quantized"] else (binfo["params"] * 2 if binfo["params"] else None)
         run = flow.EvalRun(args.model, label, tasks, args.eval_limit, mode, env, args.quantization, rowinfo, weight,
                            args.baseline, bbytes, {"qtool": __version__, "model": args.model, "baseline": args.baseline,
                                                    "gpu": gpu.name, "tasks": tasks, "limit": args.eval_limit,
@@ -311,6 +344,9 @@ def main(argv=None, system: System | None = None, console: Console | None = None
     system, console = system or System(), console or Console()
     try:
         return (cmd_quantize if args.command == "quantize" else cmd_eval)(args, system, console)
+    except KeyboardInterrupt:
+        console.line("\nInterrupted")
+        return 130
     except (UsageError, preflight.PreflightError) as e:
         console.line(f"error: {e}")
         return 2

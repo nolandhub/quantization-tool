@@ -1,5 +1,7 @@
 # ABOUTME: Tests for qtool.cli: argument validation (exit 2), dry-run, preflight blocking before any container,
 # ABOUTME: a full fake quantize run, stale checkpoint, Ctrl-C (exit 130) and `qtool eval --act` checks.
+import collections
+import dataclasses
 import io
 import itertools
 import subprocess
@@ -24,15 +26,17 @@ class FakeSystem(cli.System):
         self.built = []
         self.chowns = []
         self.docker = None
+        self.gpu_err = None
+        self.sm = None
         ticks = itertools.count(0, 5)
         self.clock = lambda: next(ticks)
 
     def run(self, spec, log_path, on_line, on_tick=None):
         if self.docker is None:
             self.docker = FakeDocker(self.fixtures, Path(spec.mounts[3][0]))
-            self.docker.evals = {"bf16": ("lm_eval/eval-bf16-chat.log", "lm_eval/out/bf16-chat", 0),
+            self.docker.evals = collections.defaultdict(lambda: ("lm_eval/eval-bf16-chat.log", "lm_eval/out/bf16-chat", 0), {"bf16": ("lm_eval/eval-bf16-chat.log", "lm_eval/out/bf16-chat", 0),
                                  "int4-w4a16": ("lm_eval/eval-w4a16-none.log", "lm_eval/out/w4a16-none", 0),
-                                 "INT4-W4A16+act-int8": ("lm_eval/eval-w4a16-int8.log", "lm_eval/out/w4a16-int8", 0)}
+                                 "INT4-W4A16+act-int8": ("lm_eval/eval-w4a16-int8.log", "lm_eval/out/w4a16-int8", 0)})
             self.docker.probes = getattr(self, "probes", {})
         return self.docker(spec, log_path, on_line, on_tick)
 
@@ -42,12 +46,17 @@ class FakeSystem(cli.System):
     def docker_error(self):
         return None
 
+    def gpu_error(self, image, index):
+        return self.gpu_err
+
     def gpus(self):
         f = self.fixtures / "nvidia-smi"
         apps = f / ("apollo-8gpu-apps.csv" if self.gpu_csv.startswith("apollo") else "rtx4070-apps.csv")
         uuid = f / ("apollo-8gpu-uuid.csv" if self.gpu_csv.startswith("apollo") else "rtx4070-uuid.csv")
-        return preflight.parse_gpus((f / f"{self.gpu_csv}.csv").read_text()), \
-            preflight.parse_apps(apps.read_text(), uuid.read_text())
+        gpus = preflight.parse_gpus((f / f"{self.gpu_csv}.csv").read_text())
+        if self.sm:
+            gpus = [dataclasses.replace(g, cc=self.sm) for g in gpus]
+        return gpus, preflight.parse_apps(apps.read_text(), uuid.read_text())
 
     def container_names(self):
         return {}
@@ -209,3 +218,140 @@ def test_eval_act_rejects_w8a8(env):
     system.probes = {"m/w8a8": {"quantized": True, "quantization_config": W8A8_QC}}
     code, text = run("eval", "m/w8a8", "--act", "fp8")
     assert code == 2 and "--act needs an INT4 symmetric group-wise checkpoint" in text
+
+
+def test_missing_nvidia_smi_is_preflight_error(fixtures, tmp_path, monkeypatch):
+    def missing(*a, **kw):
+        raise FileNotFoundError("nvidia-smi")
+
+    monkeypatch.setattr(preflight, "query_gpus", missing)
+    system = cli.System()
+    with pytest.raises(preflight.PreflightError, match="nvidia-smi not found"):
+        system.gpus()
+    out = io.StringIO()
+    system.docker_error = lambda: None
+    code = cli.main(["quantize", "m", "--scheme", "int4-w4a16", "--output-dir", str(tmp_path)], system, Console(out, tty=False))
+    assert code == 2 and "error: nvidia-smi not found" in out.getvalue()
+
+
+def test_gpu_not_visible_in_container_blocks(env):
+    system, run = env
+    system.gpu_err = "boom"
+    code, text = run("quantize", "Qwen/Qwen3.5-4B", "--scheme", "int4-w4a16")
+    assert code == 2 and "error: boom" in text
+    assert system.docker is None and not system.lock_path.exists()
+    code, text = run("eval", "Qwen/Qwen3.5-4B")
+    assert code == 2 and "error: boom" in text and system.docker is None and not system.lock_path.exists()
+
+
+def test_gpu_error_command(monkeypatch):
+    calls = []
+
+    def fake_run(argv, **kw):
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 1, "", "no devices\n")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    msg = cli.System().gpu_error("img:1", 3)
+    assert msg == "containers cannot see GPU 3: no devices"
+    assert calls[0] == ["docker", "run", "--rm", "--gpus", "device=3", "--entrypoint", "nvidia-smi", "img:1", "-L"]
+
+
+def test_sm70_quantize_with_eval_blocks_before_any_build(fixtures, tmp_path):
+    out = io.StringIO()
+    system = FakeSystem(fixtures, tmp_path, "apollo-8gpu")
+    code = cli.main(["quantize", "m", "--scheme", "int4-w4a16", "--gpu", "1", "--output-dir", str(tmp_path / "runs")],
+                    system, Console(out, tty=False))
+    assert code == 2 and "eval cannot run on SM 7.0" in out.getvalue()
+    assert system.built == [] and system.docker is None and not system.lock_path.exists()
+
+
+def test_stale_checkpoint_refused_before_any_build(env):
+    system, run = env
+    assert run("quantize", "Qwen/Qwen3.5-4B", "--scheme", "int4-w4a16", "--no-eval")[0] == 0
+    built, nspecs = list(system.built), len(system.docker.specs)
+    code, text = run("quantize", "Qwen/Qwen3.5-4B", "--scheme", "int4-w4a16", "--no-eval", "--calib-samples", "256")
+    assert code == 2 and "re-run with --force to rebuild it" in text
+    assert system.built == built and len(system.docker.specs) == nspecs
+
+
+def test_eval_act_dry_run_checks_sm(env):
+    system, run = env
+    system.sm = "8.0"
+    code, text = run("eval", "m", "--act", "fp8", "--dry-run")
+    assert code == 2 and "--act needs SM 8.9 or 12.0" in text
+    assert system.docker is None and system.built == [] and not system.lock_path.exists()
+
+
+def test_eval_baseline_completion_mode(env):
+    system, run = env
+    system.probes = {"m/base": {"chat_mode": "completion", "chat_reason": "template drops content"}}
+    code, text = run("eval", "Qwen/Qwen3.5-4B", "--baseline", "m/base", "--eval-limit", "50")
+    assert "[preflight] eval mode completion (template drops content)" in text
+    cmds = [sp.command for sp in system.docker.specs if sp.command[0] == "lm_eval"]
+    assert cmds and all("--apply_chat_template" not in c for c in cmds)
+
+
+def test_eval_dry_run_prints_plan(env):
+    system, run = env
+    code, text = run("eval", "Qwen/Qwen3.5-4B", "--dry-run")
+    assert code == 0 and "Plan for eval of Qwen/Qwen3.5-4B" in text
+    assert system.docker is None and system.built == [] and not system.lock_path.exists()
+
+
+def test_eval_bf16_uses_model_id_and_skips_when_too_big(env):
+    system, run = env
+    code, text = run("eval", "Qwen/Qwen3.5-4B", "--eval-limit", "50")
+    assert code == 0, text
+    spec = [sp for sp in system.docker.specs if sp.command[0] == "lm_eval"][-1]
+    assert "pretrained=Qwen/Qwen3.5-4B," in spec.command[4]
+    system.docker.probes = {"big/model": {"params": 10_000_000_000}}
+    code, text = run("eval", "big/model", "--eval-limit", "50")
+    assert "SKIPPED" in text
+
+
+def test_quantized_baseline_uses_weight_bytes(env):
+    system, run = env
+    system.probes = {"m/q": {"quantized": True, "quantization_config": W4A16_QC, "weight_bytes": 5_200_000_000,
+                             "params": 10_000_000_000}}
+    code, text = run("eval", "Qwen/Qwen3.5-4B", "--baseline", "m/q", "--eval-limit", "50")
+    assert "SKIPPED" not in text, text
+
+
+def test_lock_contention_exits_2(env):
+    system, run = env
+    system.lock_path.write_text("1")
+    code, text = run("eval", "Qwen/Qwen3.5-4B")
+    assert code == 2 and "another qtool run (pid 1) is active" in text
+
+
+def test_docker_error_exits_2(env):
+    system, run = env
+    system.docker_error = lambda: "docker is not installed"
+    code, text = run("eval", "Qwen/Qwen3.5-4B")
+    assert code == 2 and "error: docker is not installed" in text
+
+
+def test_ctrl_c_before_lock_exits_130(env):
+    system, run = env
+
+    def boom():
+        raise KeyboardInterrupt
+
+    system.docker_error = boom
+    code, text = run("eval", "Qwen/Qwen3.5-4B")
+    assert code == 130 and "Interrupted" in text
+
+
+def test_multi_gpu_table_labels_use_container_names(fixtures, tmp_path):
+    out = io.StringIO()
+    system = FakeSystem(fixtures, tmp_path, "apollo-8gpu")
+    system.container_names = lambda: {i: "named-ctr" for i in ("x",)}
+    called = []
+    orig = preflight.process_label
+    preflight.process_label = lambda a, names: (called.append(a), orig(a, names))[1]
+    try:
+        cli.main(["eval", "m", "--output-dir", str(tmp_path)], system, Console(out, tty=False))
+    finally:
+        preflight.process_label = orig
+    assert called

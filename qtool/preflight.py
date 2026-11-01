@@ -120,13 +120,13 @@ def gpu_table(gpus: list[Gpu], apps: list[GpuApp], label=lambda a: f"pid {a.pid}
     return out
 
 
-def select_gpu(gpus: list[Gpu], requested: int | None, apps: list[GpuApp] = ()) -> Gpu:
+def select_gpu(gpus: list[Gpu], requested: int | None, apps: list[GpuApp] = (), label=None) -> Gpu:
     if not gpus:
         raise PreflightError("no NVIDIA GPU found by nvidia-smi")
     if requested is None:
         if len(gpus) == 1:
             return gpus[0]
-        raise PreflightError("\n".join([f"this machine has {len(gpus)} GPUs: choose one with --gpu N", *gpu_table(gpus, apps)]))
+        raise PreflightError("\n".join([f"this machine has {len(gpus)} GPUs: choose one with --gpu N", *(gpu_table(gpus, apps, label) if label else gpu_table(gpus, apps))]))
     for g in gpus:
         if g.index == requested:
             return g

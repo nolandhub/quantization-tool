@@ -31,7 +31,7 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--seq-len", type=int, required=True)
     ap.add_argument("--calib-cache", required=True, help="directory for the tokenized calibration set")
     ap.add_argument("--ignore", default="", help="extra ignore patterns, comma separated")
-    ap.add_argument("--signature", default="{}", help="JSON written verbatim into qtool.json for cache checks")
+    ap.add_argument("--signature", default="{}", type=json.loads, help="JSON written verbatim into qtool.json for cache checks")
     ap.add_argument("--out", required=True)
     return ap.parse_args(argv)
 
@@ -105,8 +105,9 @@ def main(argv=None) -> int:
 
     emit("step", n=1)
     cfg, _ = transformers.PretrainedConfig.get_config_dict(a.model)
-    if "quantization_config" in cfg:
-        method = cfg["quantization_config"].get("quant_method", "unknown")
+    qc = cfg.get("quantization_config")
+    if qc:
+        method = qc.get("quant_method", "unknown")
         emit("refused", reason=f"model is already quantized ({method})", hint="evaluate it with `qtool eval`")
         return EXIT_REFUSED
     if remote_code_required(cfg, transformers):
@@ -130,6 +131,10 @@ def main(argv=None) -> int:
     emit("recipe", **r)
     if not r["sequential_target"]:
         emit("refused", reason="no decoder layer list found (no ModuleList outside vision modules)", hint="")
+        return EXIT_REFUSED
+    if r["linears_quantized"] == 0:
+        emit("refused", reason="derived ignore list excludes every Linear (nothing to quantize)",
+             hint="check --ignore and the architecture")
         return EXIT_REFUSED
 
     emit("step", n=2)
@@ -170,7 +175,7 @@ def main(argv=None) -> int:
     import llmcompressor
 
     (out / "qtool.json").write_text(json.dumps({
-        "signature": json.loads(a.signature),
+        "signature": a.signature,
         "recipe": {k: r[k] for k in ("ignore", "sequential_target", "num_layers", "linears_quantized")},
         "calib": {k: v for k, v in stats.items() if k != "cached"},
         "compute_dtype": a.compute_dtype, "cast": cast, "oneshot_seconds": oneshot_seconds,

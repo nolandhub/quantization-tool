@@ -56,7 +56,7 @@ def _docker_stop(name: str) -> None:
 
 def run_container(spec: ContainerSpec, log_path: Path, on_line, on_tick=None, popen=subprocess.Popen,
                   tick: float = 1.0, stop=_docker_stop) -> int:
-    """Run to completion and return the exit code; on KeyboardInterrupt stop the container and re-raise."""
+    """Run to completion and return the exit code; on any exception stop the container, reap it and re-raise."""
     log_path = Path(log_path)
     log_path.parent.mkdir(parents=True, exist_ok=True)
     decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
@@ -80,7 +80,7 @@ def run_container(spec: ContainerSpec, log_path: Path, on_line, on_tick=None, po
             for line in splitter.feed(decoder.decode(b"", final=True)) + splitter.flush():
                 on_line(line)
             return proc.wait()
-        except KeyboardInterrupt:
+        except BaseException:
             stop(spec.name)
             _drain(proc, sel, log)
             raise

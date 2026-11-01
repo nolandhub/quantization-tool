@@ -88,3 +88,22 @@ def test_atomic_dir_renames_on_success_and_cleans_on_failure(tmp_path):
             (tmp / "partial").write_text("x")
             raise RuntimeError("container failed")
     assert not tmp.exists() and (final / "config.json").exists()
+
+
+def test_parser_error_stops_container_and_reaps_process(fixtures, tmp_path):
+    stopped, procs = [], []
+    base = fake_popen(fixtures / "llmcompressor/w4a16-gptq.log")
+
+    def popen(argv, **kw):
+        proc = base(argv, **kw)
+        procs.append(proc)
+        return proc
+
+    def on_line(line):
+        if "(2/33)" in line:
+            raise RuntimeError("parser bug")
+
+    with pytest.raises(RuntimeError, match="parser bug"):
+        runner.run_container(spec(name="qtool-7-4"), tmp_path / "x.log", on_line, popen=popen, stop=stopped.append)
+    assert stopped == ["qtool-7-4"]
+    assert procs[0].returncode is not None

@@ -4663,6 +4663,8 @@ ssh rtx4070 'qtool eval ~/qtool/runs/Qwen3.5-4B/checkpoints/INT4-W4A16 --baselin
 
 Expected: `EXIT 0`; |Δ| giữa 2 checkpoint ≤ stderr của lm_eval (≈ ±0.011 với 1319 câu). Lệch hơn → không sửa code, báo Nhân kèm 2 bảng lm_eval.
 
+> **Sửa tiêu chí (2026-11-02, Nhân duyệt):** so 1 lần quantize với stderr không dùng được, vì GPTQ không tất định giữa các lần (~±2 pp gsm8k, lớn hơn stderr eval). Tiêu chí mới: checkpoint tự làm với cùng recipe RedHat (`--calib` Open-Platypus 1024×8192, dampening 0.05) nằm trong dải dao động của script tham chiếu RedHat chạy trên cùng image. Kết quả: qtool 0.772–0.795 (3 lần), script RedHat 0.795–0.809 (2 lần), calib trùng từng token → **đạt**. Chi tiết: `docs/spike/2026-11-01-acceptance-followup.md`.
+
 - [ ] **Step 3: Ghi kết quả acceptance vào findings, commit**
 
 ```bash

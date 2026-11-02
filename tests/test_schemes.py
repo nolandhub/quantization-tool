@@ -26,7 +26,7 @@ def test_checkpoints_are_shared_and_fp8_has_none():
 
 def test_int4_recipe_records_dampening():
     # The recipe text is part of the checkpoint signature: INT4 checkpoints made with llmcompressor's default
-    # dampening (0.01) go stale. 0.05 matched RedHat on gsm8k (docs/spike/2026-11-01-acceptance-followup.md).
+    # dampening (0.01) go stale. 0.05 matches RedHat's published recipe (docs/spike/2026-11-01-acceptance-followup.md).
     assert "dampening_frac=0.05" in schemes.CHECKPOINTS["INT4-W4A16"]["recipe"]
     assert "dampening_frac" not in schemes.CHECKPOINTS["INT8-W8A8"]["recipe"]
 

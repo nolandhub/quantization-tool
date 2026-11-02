@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from recipe import derive, is_multimodal, loader_name, orig_dtype, remote_code_required, render_calib  # noqa: E402
 
 PRESETS = {"INT4-W4A16": "W4A16", "INT8-W8A8": "W8A8"}
-# GPTQ dampening: 0.05 for W4A16 matched RedHat on gsm8k (docs/spike/2026-11-01-acceptance-followup.md);
+# GPTQ dampening: 0.05 for W4A16 matches RedHat's published recipe (docs/spike/2026-11-01-acceptance-followup.md);
 # W8A8 keeps llmcompressor's default 0.01 (no evidence either way)
 DAMPENING = {"W4A16": 0.05, "W8A8": 0.01}
 EXIT_REFUSED = 3

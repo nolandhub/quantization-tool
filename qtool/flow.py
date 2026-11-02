@@ -269,6 +269,8 @@ def quantization_text(qc: dict | None) -> str:
     w, a = group.get("weights") or {}, group.get("input_activations")
     if not w:
         return str(qc.get("quant_method"))
+    if w.get("type") == "float" and w.get("num_bits") == 4 and w.get("group_size") == 16:
+        return f"{qc.get('quant_method')} · NVFP4 W4A{a['num_bits'] if a else 16} g16"
     text = f"{qc.get('quant_method')} · {str(w.get('type')).upper()}{w.get('num_bits')} W{w.get('num_bits')}A{a['num_bits'] if a else 16}"
     return text + (f" g{w['group_size']}" if w.get("group_size") else "") + (" symmetric" if w.get("symmetric") else "")
 

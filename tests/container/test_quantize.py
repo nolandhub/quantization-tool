@@ -53,6 +53,23 @@ def test_w4a16_phi3_float32_compute_casts_back(capsys, tiny_dir, calib_jsonl, tm
     assert "dampening_frac: 0.05" in (out / "recipe.yaml").read_text()
 
 
+def test_nvfp4_qwen3_5_saves_fp4_weights_and_activations(capsys, tiny_dir, calib_jsonl, tmp_path):
+    out = tmp_path / "NVFP4"
+    code, evs = run(capsys, tiny_dir("qwen3_5"), out, calib_jsonl, tmp_path / "calib", checkpoint="NVFP4")
+    assert code == 0
+    assert [e["n"] for e in evs if e["event"] == "step"] == [1, 2, 3]
+    cfg = json.loads((out / "config.json").read_text())
+    groups = cfg["quantization_config"]["config_groups"]
+    group = groups[next(iter(groups))]
+    assert group["weights"]["type"] == "float" and group["weights"]["num_bits"] == 4
+    assert group["weights"]["group_size"] == 16
+    assert group["input_activations"]["num_bits"] == 4
+    recipe = (out / "recipe.yaml").read_text()
+    assert "QuantizationModifier" in recipe and "scheme: NVFP4" in recipe and "GPTQModifier" not in recipe
+    meta = json.loads((out / "qtool.json").read_text())
+    assert meta["signature"]["checkpoint"] == "NVFP4"
+
+
 def test_calib_cache_is_reused(capsys, tiny_dir, calib_jsonl, tmp_path):
     cache = tmp_path / "calib"
     run(capsys, tiny_dir("phi3"), tmp_path / "a", calib_jsonl, cache)

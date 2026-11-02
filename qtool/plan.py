@@ -94,19 +94,20 @@ def cached_result(path: Path, wanted: dict) -> tuple[bool, str]:
 
 def render_plan(model: str, states: list[CheckpointState], schemes_: list[str], tasks: list[str], limit: int | None,
                 baseline_note: str | None, no_eval: bool) -> list[str]:
-    out = [f"Plan for {model} ({len(schemes_)} scheme{'s' if len(schemes_) != 1 else ''})"]
+    n = len(schemes_)
+    out = [f"Plan for {model} ({n} scheme{'s' if n != 1 else ''})"]
     for st in states:
-        users = ", ".join(st.schemes)
         if st.action in ("build", "rebuild"):
-            out.append(f"  quantize  {st.name:<11} -> {'shared by' if len(st.schemes) > 1 else 'used by'}: {users}"
-                       + ("  (--force)" if st.action == "rebuild" else ""))
+            users = ", ".join(st.schemes)
+            out.append(f"  quantize  {st.name:<11} -> {users}" + ("  (--force)" if st.action == "rebuild" else ""))
         elif st.action == "reuse":
             out.append(f"  reuse     {st.name:<11} -> checkpoints/{st.name} (qtool.json matches)")
         else:
             out.append(f"  stale     {st.name:<11} -> checkpoints/{st.name} differs: " + "; ".join(st.diff))
     for s in schemes_:
         if schemes.SCHEMES[s].quantization:
-            out.append(f"  online    {s:<11} -> vLLM --quantization {schemes.SCHEMES[s].quantization} (no checkpoint)")
+            out.append(f"  runtime   {s:<11} (no checkpoint, vLLM quantizes to "
+                       f"{schemes.SCHEMES[s].quantization.upper()} at load time)")
     if no_eval:
         out.append("  eval      skipped (--no-eval)")
     else:

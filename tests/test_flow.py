@@ -24,6 +24,7 @@ def setup(fixtures, tmp_path):
     docker.evals = {"bf16": ("lm_eval/eval-bf16-chat.log", "lm_eval/out/bf16-chat", 0),
                     "int4-w4a16": ("lm_eval/eval-w4a16-none.log", "lm_eval/out/w4a16-none", 0),
                     "int4-w4a8-fp8": ("lm_eval/eval-w4a16-fp8.log", "lm_eval/out/w4a16-fp8", 0),
+                    "nvfp4-w4a4": ("lm_eval/eval-w4a16-none.log", "lm_eval/out/w4a16-none", 0),
                     "int8-w8a8": ("lm_eval/eval-w8a8.log", "lm_eval/out/w8a8", 0),
                     "fp8-w8a8": ("lm_eval/eval-fp8-online.log", "lm_eval/out/fp8-online", 0)}
     return s, docker, out
@@ -139,6 +140,22 @@ def test_eval_failure_quotes_the_vllm_error(setup):
     text = out.getvalue()
     assert "max_num_seqs (256) exceeds available Mamba cache blocks (124)" in text
     assert "  int8-w8a8       FAILED" in text and "  fp8-w8a8        OK" in text
+
+
+def test_nvfp4_checkpoint_is_quantized_and_evaluated(setup):
+    s, docker, out = setup
+    assert flow.run_quantize(s, quantize_run(s, ["nvfp4-w4a4"])) == 0
+    text = out.getvalue()
+    assert "[3/4] Quantizing NVFP4" in text
+    assert "  checkpoint   : checkpoints/NVFP4" in text and "(shared)" not in text
+    assert "  quantization : compressed-tensors · NVFP4 W4A4 g16" in text
+    assert "  nvfp4-w4a4" in text and "VLLM_MARLIN_INPUT_DTYPE" not in text
+
+
+def test_nvfp4_quantization_text_without_input_activations():
+    qc = {"quant_method": "compressed-tensors",
+          "config_groups": {"g": {"weights": {"num_bits": 4, "type": "float", "group_size": 16}}}}
+    assert flow.quantization_text(qc) == "compressed-tensors · NVFP4 W4A16 g16"
 
 
 def test_w4a8_without_marlin_line_is_invalid(setup):

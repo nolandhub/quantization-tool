@@ -138,6 +138,12 @@ def test_eval_sm_89_is_verified_and_quiet(fixtures):
     assert pf.check_eval_sm(gpu, ["int4-w4a16", "int4-w4a8-fp8", "int4-w4a8-int8", "int8-w8a8", "fp8-w8a8"]) == []
 
 
+def test_nvfp4_on_sm89_warns_weight_only():
+    sm89 = pf.Gpu(0, "RTX 4070", "8.9", 0, 16376, 16376)
+    found = pf.check_eval_sm(sm89, ["nvfp4-w4a4"], baseline=False)
+    assert [f.level for f in found] == ["warn"] and "weight-only FP4" in found[0].message
+
+
 def test_eval_fit_olmoe_bf16_skipped_quantized_fits(fixtures):
     gpu = gpus_of(fixtures, "rtx4070")[0]
     reason = pf.check_eval_fit("bf16 baseline", int(12.89 * pf.GIB), gpu)

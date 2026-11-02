@@ -12,6 +12,11 @@ W4A16_QC = {"quant_method": "compressed-tensors", "format": "pack-quantized",
 W8A8_QC = {"quant_method": "compressed-tensors", "format": "int-quantized",
            "config_groups": {"group_0": {"weights": {"num_bits": 8, "type": "int", "symmetric": True, "strategy": "channel"},
                                          "input_activations": {"num_bits": 8, "type": "int", "dynamic": True}}}}
+NVFP4_QC = {"quant_method": "compressed-tensors", "format": "nvfp4-pack-quantized",
+            "config_groups": {"group_0": {"weights": {"num_bits": 4, "type": "float", "symmetric": True,
+                                                      "strategy": "tensor_group", "group_size": 16},
+                                          "input_activations": {"num_bits": 4, "type": "float", "dynamic": "local",
+                                                                "strategy": "tensor_group", "group_size": 16}}}}
 
 
 def ev(event, **fields):
@@ -90,7 +95,8 @@ class FakeDocker:
         out += [line for line in self.lines(log) if "(" in line or "|" in line]
         tmp = self.host(arg(cmd, "--out"))
         tmp.mkdir(parents=True, exist_ok=True)
-        (tmp / "config.json").write_text(json.dumps({"quantization_config": W8A8_QC if ckpt == "INT8-W8A8" else W4A16_QC}))
+        qc = {"INT8-W8A8": W8A8_QC, "NVFP4": NVFP4_QC}.get(ckpt, W4A16_QC)
+        (tmp / "config.json").write_text(json.dumps({"quantization_config": qc}))
         (tmp / "model.safetensors").write_bytes(b"x" * 1000)
         (tmp / "qtool.json").write_text(json.dumps({"signature": json.loads(arg(cmd, "--signature"))}))
         out += [ev("oneshot", seconds=905.9, peak_gpu_bytes=2097972224),

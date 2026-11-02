@@ -115,14 +115,40 @@ def test_unknown_scheme_is_usage_error(env):
     system, run = env
     code, text = run("quantize", "Qwen/Qwen3.5-4B", "--scheme", "int4-w4a8")
     assert code == 2 and "error: unknown scheme 'int4-w4a8'" in text and system.docker is None
+    assert "schemes that build a checkpoint:" in text and "schemes that reuse INT4-W4A16" in text
+
+
+def test_quantize_help_shows_scheme_groups(capsys):
+    with pytest.raises(SystemExit) as e:
+        cli.main(["quantize", "--help"])
+    out = capsys.readouterr().out
+    assert e.value.code == 0 and "--act" not in out and "nvfp4-w4a4" in out
+    for heading in ["schemes that build a checkpoint:", "schemes that reuse INT4-W4A16 (quantized once, no extra checkpoint):",
+                    "no checkpoint, vLLM quantizes at load time:"]:
+        assert heading in out
+
+
+def test_quantize_has_no_act_option(capsys):
+    with pytest.raises(SystemExit) as e:
+        cli.main(["quantize", "Qwen/Qwen3.5-4B", "--scheme", "int4-w4a16", "--act", "fp8"])
+    assert e.value.code == 2 and "unrecognized arguments: --act" in capsys.readouterr().err
 
 
 def test_dry_run_prints_plan_and_runs_nothing(env):
     system, run = env
     code, text = run("quantize", "Qwen/Qwen3.5-4B", "--scheme", "int4-w4a16,int4-w4a8-fp8", "--dry-run")
     assert code == 0
-    assert "  quantize  INT4-W4A16  -> shared by: int4-w4a16, int4-w4a8-fp8" in text
+    assert "  quantize  INT4-W4A16  -> int4-w4a16, int4-w4a8-fp8" in text
     assert system.docker is None and system.built == [] and not system.lock_path.exists()
+
+
+def test_w4a8_alone_quantizes_int4_once_and_plans_one_eval_row(env):
+    system, run = env
+    code, text = run("quantize", "Qwen/Qwen3.5-4B", "--scheme", "int4-w4a8-fp8", "--dry-run")
+    assert code == 0
+    assert "Plan for Qwen/Qwen3.5-4B (1 scheme)" in text
+    assert "  quantize  INT4-W4A16  -> int4-w4a8-fp8" in text
+    assert "  eval      int4-w4a8-fp8   tasks:" in text and "int4-w4a16," not in text
 
 
 def test_multi_gpu_needs_flag(fixtures, tmp_path):

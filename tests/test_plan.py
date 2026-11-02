@@ -94,10 +94,17 @@ def test_render_plan():
                              ["gsm8k"], None, "cache: none, will run", no_eval=False)
     assert lines == [
         "Plan for Qwen/Qwen3.5-4B (4 schemes)",
-        "  quantize  INT4-W4A16  -> shared by: int4-w4a16, int4-w4a8-fp8",
+        "  quantize  INT4-W4A16  -> int4-w4a16, int4-w4a8-fp8",
         "  reuse     INT8-W8A8   -> checkpoints/INT8-W8A8 (qtool.json matches)",
-        "  online    fp8-w8a8    -> vLLM --quantization fp8 (no checkpoint)",
+        "  runtime   fp8-w8a8    (no checkpoint, vLLM quantizes to FP8 at load time)",
         "  eval      bf16 baseline (cache: none, will run)",
         "  eval      int4-w4a16, int4-w4a8-fp8, int8-w8a8, fp8-w8a8   tasks: gsm8k (full)",
     ]
+    nv = plan.render_plan("m", [plan.CheckpointState("NVFP4", ["nvfp4-w4a4"], "rebuild", [])], ["nvfp4-w4a4"],
+                          ["gsm8k"], 50, None, no_eval=False)
+    assert nv[:2] == ["Plan for m (1 scheme)", "  quantize  NVFP4       -> nvfp4-w4a4  (--force)"]
+    w4a8 = plan.render_plan("m", [plan.CheckpointState("INT4-W4A16", ["int4-w4a8-fp8"], "build", [])], ["int4-w4a8-fp8"],
+                            ["gsm8k"], 50, None, no_eval=False)
+    assert w4a8[1] == "  quantize  INT4-W4A16  -> int4-w4a8-fp8"
+    assert w4a8[-1] == "  eval      int4-w4a8-fp8   tasks: gsm8k (50)"
     assert plan.render_plan("m", [], ["fp8-w8a8"], ["gsm8k"], 50, None, no_eval=True)[-1] == "  eval      skipped (--no-eval)"

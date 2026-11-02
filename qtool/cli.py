@@ -62,9 +62,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="qtool", description="Quantize a model with LLM Compressor and evaluate it in vLLM.")
     p.add_argument("--version", action="version", version=f"qtool {__version__}")
     sub = p.add_subparsers(dest="command", required=True)
-    q = sub.add_parser("quantize", help="steps 1-4: load, calibrate, quantize into the requested schemes, evaluate")
+    q = sub.add_parser("quantize", help="steps 1-4: load, calibrate, quantize into the requested schemes, evaluate",
+                       formatter_class=argparse.RawDescriptionHelpFormatter, epilog=schemes.scheme_help())
     q.add_argument("model", metavar="MODEL", help="HF repo id or local dir of the unquantized model")
-    q.add_argument("--scheme", required=True, metavar="SCHEMES", help=f"comma separated: {', '.join(schemes.SCHEMES)}")
+    q.add_argument("--scheme", required=True, metavar="SCHEMES", help="comma separated, see the list below")
     g = q.add_argument_group("calibration (step 2)")
     g.add_argument("--calib", default=DEFAULT_CALIB, metavar="SOURCE",
                    help=f"HF dataset id[:split] or .jsonl with 'messages' or 'text' [default: {DEFAULT_CALIB}]")

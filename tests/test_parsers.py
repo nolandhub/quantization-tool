@@ -34,6 +34,7 @@ def test_split_lines_handles_carriage_returns():
     ("llmcompressor/olmoe-w4a16-generic.log", 17, 1, 3136, 2070.83, 0, True, "model.layers.15.mlp.experts.63.down_proj"),
     ("llmcompressor/smolvlm2-w4a16-generic.log", 25, 1, 168, 195.07, 0, False, "model.text_model.layers.23.mlp.down_proj"),
     ("llmcompressor/w4a16-gptq-v100-fp32.log", 33, 1, 128, 1011.44, 0, False, "model.language_model.layers.31.mlp.down_proj"),
+    ("llmcompressor/nvfp4-qmod.log", 33, 1, 0, 0.0, 0, False, None),  # QuantizationModifier: no GPTQ lines
 ])
 def test_quantize_progress_on_real_logs(fixtures, rel, total, passes, gptq, gsec, smoothed, linearized, module):
     p = feed_all(parsers.QuantizeProgress(), lines_of(fixtures, rel))
@@ -81,6 +82,13 @@ def test_eval_progress_on_real_logs(fixtures, rel, kernels, gib, kv, downcast):
     assert (p.prompts_done, p.prompts_total) == (50, 50)
     assert p.table[0].startswith("|Tasks|") and len(p.table) == 4
     assert p.table[3].startswith("|     |       |strict-match")
+
+
+def test_eval_progress_on_nvfp4_full_run(fixtures):
+    """gsm8k full run of a qtool NVFP4 checkpoint on SM 8.9 (acceptance 2026-11-02): weight-only Marlin FP4."""
+    p = feed_all(parsers.EvalProgress(), lines_of(fixtures, "lm_eval/eval-nvfp4.log"))
+    assert (p.kernels, p.load_gib, p.kv_tokens, p.downcast) == (["MarlinNvFp4LinearKernel for NVFP4"], 5.23, 103277, None)
+    assert (p.prompts_done, p.prompts_total) == (1319, 1319)
 
 
 @pytest.mark.parametrize("rel,quote,hint", [

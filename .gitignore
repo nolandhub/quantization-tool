@@ -1,4 +1,20 @@
+# Python
 .venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# Agent / editor working files
+.superpowers/
+.claude/
+.idea/
+.vscode/
+.DS_Store
+
+# Run output (qtool writes to ~/qtool/runs by default; this covers --output-dir inside the checkout)
+runs/
+*.log
+!tests/fixtures/**/*.log

@@ -61,8 +61,17 @@ Serve it like any model: `vllm serve ~/qtool/runs/Qwen3.5-4B/checkpoints/INT4-W4
 ## Common tasks
 
 ```bash
-# Several schemes in one run (int4-w4a16 and int4-w4a8-fp8 share one checkpoint, so it is quantized once)
+# Several schemes in one run: one checkpoint each, quantized one after another
+qtool quantize Qwen/Qwen3.5-4B --scheme int4-w4a16,int8-w8a8,nvfp4-w4a4
+
+# Only W4A8: builds the INT4-W4A16 checkpoint, evaluates it with FP8 activations
+qtool quantize Qwen/Qwen3.5-4B --scheme int4-w4a8-fp8
+
+# W4A16 and W4A8 together: the INT4 checkpoint is quantized once, evaluated twice
 qtool quantize Qwen/Qwen3.5-4B --scheme int4-w4a16,int4-w4a8-fp8
+
+# W4A8 on an INT4 checkpoint you already have
+qtool eval ~/qtool/runs/Qwen3.5-4B/checkpoints/INT4-W4A16 --act fp8
 
 # Only evaluate a model that already exists (any model vLLM can load), compared with another one
 qtool eval RedHatAI/Qwen3.5-4B-quantized.w4a16 --baseline Qwen/Qwen3.5-4B
@@ -81,26 +90,29 @@ qtool quantize Qwen/Qwen3.5-4B --scheme int4-w4a16 --gpu 1
 
 ## Schemes
 
-| Scheme             | Weights / activations | What it is                                                                  |
-| ------------------ | --------------------- | --------------------------------------------------------------------------- |
-| `int4-w4a16`     | 4-bit / 16-bit        | GPTQ, smallest checkpoint, widest GPU support                               |
-| `int4-w4a8-fp8`  | 4-bit / FP8           | same checkpoint as `int4-w4a16`, faster kernel at runtime                 |
-| `int4-w4a8-int8` | 4-bit / INT8          | same checkpoint as `int4-w4a16`, faster kernel at runtime                 |
-| `int8-w8a8`      | 8-bit / 8-bit         | SmoothQuant + GPTQ                                                          |
-| `fp8-w8a8`       | FP8 / FP8             | vLLM quantizes on the fly while loading: no checkpoint, nothing to quantize |
+Each scheme is one row in the results. qtool works out which checkpoints to build.
 
-If you are not sure, start with `int4-w4a16`.
+| Scheme           | Weights / activations | Checkpoint             | Notes                                            |
+| ---------------- | --------------------- | ---------------------- | ------------------------------------------------ |
+| `int4-w4a16`     | INT4 / 16-bit         | `INT4-W4A16`           | GPTQ, smallest, runs on most GPUs                |
+| `int8-w8a8`      | INT8 / INT8           | `INT8-W8A8`            | SmoothQuant + GPTQ                               |
+| `nvfp4-w4a4`     | FP4 / FP4             | `NVFP4`                | full FP4 on Blackwell, weight-only on older GPUs |
+| `int4-w4a8-fp8`  | INT4 / FP8            | reuses `INT4-W4A16`    | no extra quantize, 8-bit activations at runtime  |
+| `int4-w4a8-int8` | INT4 / INT8           | reuses `INT4-W4A16`    | no extra quantize, 8-bit activations at runtime  |
+| `fp8-w8a8`       | FP8 / FP8             | none                   | vLLM quantizes the model while loading it        |
+
+Not sure? Start with `int4-w4a16`.
 
 ## Which GPU for which scheme
 
-| GPU generation (compute capability) | Examples           | Quantize                         | Evaluate                                                     |
-| ----------------------------------- | ------------------ | -------------------------------- | ------------------------------------------------------------ |
-| Volta (7.0)                         | V100               | yes (float32, about 10× slower) | no: vLLM 0.28 has no kernels                                 |
-| Turing (7.5)                        | T4, RTX 20xx       | yes (float32)                    | `int8-w8a8`                                                |
-| Ampere (8.0, 8.6)                   | A100, RTX 30xx     | yes                              | `int4-w4a16`, `int8-w8a8`, `fp8-w8a8` (as weight-only) |
-| Ada (8.9)                           | L4, L40S, RTX 40xx | yes                              | all schemes                                                  |
-| Hopper (9.0)                        | H100, H200         | yes                              | all except `int4-w4a8-*`                                   |
-| Blackwell (10.x, 12.x)              | B200, RTX 50xx     | yes                              | `int4-w4a16`, `fp8-w8a8` (+ `int4-w4a8-*` on 12.x)     |
+| GPU generation (compute capability) | Examples           | Quantize                         | Evaluate                                                                        |
+| ----------------------------------- | ------------------ | -------------------------------- | ------------------------------------------------------------------------------- |
+| Volta (7.0)                         | V100               | yes (float32, about 10× slower) | no: vLLM 0.28 has no kernels                                                    |
+| Turing (7.5)                        | T4, RTX 20xx       | yes (float32)                    | `int8-w8a8`, `nvfp4-w4a4` (as weight-only)                                  |
+| Ampere (8.0, 8.6)                   | A100, RTX 30xx     | yes                              | `int4-w4a16`, `int8-w8a8`, `fp8-w8a8` and `nvfp4-w4a4` (as weight-only) |
+| Ada (8.9)                           | L4, L40S, RTX 40xx | yes                              | all schemes (`nvfp4-w4a4` as weight-only)                                  |
+| Hopper (9.0)                        | H100, H200         | yes                              | all except `int4-w4a8-*` (`nvfp4-w4a4` as weight-only)                      |
+| Blackwell (10.x, 12.x)              | B200, RTX 50xx     | yes                              | `int4-w4a16`, `nvfp4-w4a4` (native FP4), `fp8-w8a8` (+ `int4-w4a8-*` on 12.x) |
 
 qtool checks this before it starts. If a scheme cannot run on your GPU it says why and suggests one that can.
 

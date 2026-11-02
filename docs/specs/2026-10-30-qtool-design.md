@@ -368,7 +368,7 @@ rồi `[4/4]` cho baseline (nếu `--baseline`) và model, rồi bảng tổng h
 ### Quy tắc cache
 
 - Checkpoint dùng lại chỉ khi `qtool.json` khớp tham số lần chạy (model, recipe, calib source,
-  samples, seq len, phiên bản llmcompressor). Không khớp → exit 2, in từng trường khác, gợi ý `--force`.
+  samples, seq len, phiên bản llmcompressor, compute dtype). Không khớp → exit 2, in từng trường khác, gợi ý `--force`.
 - Baseline dùng lại chỉ khi khớp task, limit, số shot, image eval. Không khớp → tự chạy lại, in lý do
   (`baseline cache stale: eval-limit 250 → full`).
 

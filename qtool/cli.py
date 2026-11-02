@@ -203,7 +203,8 @@ def cmd_quantize(args, system: System, console: Console) -> int:
     ignore = [p.strip() for p in args.ignore.split(",") if p.strip()]
     needed = schemes.checkpoints_for(names)
     llmc = images.pinned("compress", "llmcompressor")
-    sigs = {c: plan.checkpoint_signature(args.model, c, args.calib, args.calib_samples, args.calib_seq_len, ignore, llmc)
+    sigs = {c: plan.checkpoint_signature(args.model, c, args.calib, args.calib_samples, args.calib_seq_len, ignore, llmc,
+                                       dtype)
             for c in needed}
     states = plan.checkpoint_states(rd, needed, sigs, args.force)
     early = preflight.check_quantize(gpu, None, dtype, 0, names, args.no_eval, thresholds=False)
@@ -251,7 +252,7 @@ def cmd_quantize(args, system: System, console: Console) -> int:
         note = None
         if not args.no_eval:
             meta = plan.eval_meta(args.model, tasks[0], args.eval_limit, evali, info["chat_mode"], gpu.name)
-            note = plan.cached_result(plan.result_path(rd, "bf16", tasks[0]), meta)[1]
+            note = "cache: " + plan.cached_result(plan.result_path(rd, "bf16", tasks[0]), meta)[1]
         console.line("")
         for line in plan.render_plan(args.model, states, names, tasks, args.eval_limit, note, args.no_eval):
             console.line(line)

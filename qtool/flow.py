@@ -92,6 +92,8 @@ def container_spec(s: Session, image: str, command: list[str], mounts=(), env=No
 def failure_reason(code: int, lines, memory_bytes: int | None) -> str:
     err = parsers.find_error(list(lines))
     if code == 137 and err is None:
+        if memory_bytes is None:  # no --memory on this container: the host OOM killer or an external kill
+            return "container killed (exit 137): host out of memory or killed externally"
         return f"container killed (exit 137): host RAM ran out at the --memory limit of {fmt_gb(memory_bytes)}"
     if err:
         return err[0] + (f" ({err[1]})" if err[1] else "")

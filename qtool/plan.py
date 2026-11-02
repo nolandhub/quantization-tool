@@ -20,9 +20,10 @@ def runs_dir(output_dir: Path, model: str) -> Path:
 
 
 def checkpoint_signature(model: str, ckpt: str, calib: str, samples: int, seq_len: int, ignore: list[str],
-                         llmcompressor: str) -> dict:
+                         llmcompressor: str, compute_dtype: str) -> dict:
     return {"model": model, "checkpoint": ckpt, "recipe": schemes.CHECKPOINTS[ckpt]["recipe"], "ignore": sorted(ignore),
-            "calib": calib, "calib_samples": samples, "calib_seq_len": seq_len, "llmcompressor": llmcompressor}
+            "calib": calib, "calib_samples": samples, "calib_seq_len": seq_len, "llmcompressor": llmcompressor,
+            "compute_dtype": compute_dtype}
 
 
 def calib_key(model: str, calib: str, samples: int, seq_len: int) -> str:
@@ -35,7 +36,8 @@ def _show(v) -> str:
 
 def diff(saved: dict, wanted: dict, names: dict | None = None) -> list[str]:
     names = names or {}
-    return [f"{names.get(k, k)}: {_show(saved.get(k))} → {_show(wanted[k])}" for k in wanted if saved.get(k) != wanted[k]]
+    return [f"{names.get(k, k)}: {_show(saved[k]) if k in saved else 'not recorded'} → {_show(wanted[k])}"
+            for k in wanted if saved.get(k) != wanted[k]]
 
 
 @dataclass
@@ -79,15 +81,15 @@ def result_path(rd: Path, label: str, task: str) -> Path:
 def cached_result(path: Path, wanted: dict) -> tuple[bool, str]:
     """(valid, reason) for a cached per-task result file written by flow.save_task_results."""
     if not path.exists():
-        return False, "cache: none, will run"
+        return False, "none, will run"
     try:
         saved = json.loads(path.read_text()).get("qtool", {})
     except (OSError, json.JSONDecodeError):
-        return False, "cache unreadable, will run"
+        return False, "unreadable, will run"
     d = diff(saved, wanted, EVAL_FIELDS)
     if d:
-        return False, "cache stale: " + "; ".join(d) + ", will run"
-    return True, "cache: valid, reused"
+        return False, "stale: " + "; ".join(d) + ", will run"
+    return True, "valid, reused"
 
 
 def render_plan(model: str, states: list[CheckpointState], schemes_: list[str], tasks: list[str], limit: int | None,

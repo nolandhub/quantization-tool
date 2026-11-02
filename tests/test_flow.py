@@ -32,7 +32,7 @@ def setup(fixtures, tmp_path):
 def quantize_run(s, names, no_eval=False, on_error="continue"):
     needed = flow.schemes.checkpoints_for(names)
     sigs = {c: plan.checkpoint_signature("Qwen/Qwen3.5-4B", c, "HuggingFaceH4/ultrachat_200k:train_sft", 512, 2048, [],
-                                         "0.13.0") for c in needed}
+                                         "0.13.0", "bfloat16") for c in needed}
     states = plan.checkpoint_states(s.rd, needed, sigs, force=False)
     opts = flow.QuantizeOptions("Qwen/Qwen3.5-4B", "HuggingFaceH4/ultrachat_200k:train_sft", 512, 2048, [], "bfloat16",
                                 9_078_531_072)
@@ -91,7 +91,7 @@ def test_second_run_reuses_checkpoint_and_baseline(setup):
     code = flow.run_quantize(s, quantize_run(s, ["int4-w4a16"]))
     assert code == 0
     assert [sp.command[0] for sp in docker.specs] == ["lm_eval"]  # only the scheme eval runs again
-    assert "  cache        : gsm8k: cache: valid, reused" in out.getvalue()
+    assert "  cache        : gsm8k: valid, reused" in out.getvalue()
 
 
 def test_quantize_failure_at_step3_skips_dependent_schemes_and_continues(setup):
@@ -265,3 +265,10 @@ def test_unreadable_results_json_fails_the_scheme(setup, tmp_path):
     assert "unreadable lm_eval results: JSONDecodeError" in text
     assert "  int8-w8a8       FAILED" in text
     assert not list(s.rd.rglob(".tmp-*"))
+
+
+def test_exit_137_without_memory_limit_does_not_claim_a_limit():
+    # probe and eval containers run without --memory: exit 137 there is the host OOM killer or an external kill
+    assert flow.failure_reason(137, [], None) == "container killed (exit 137): host out of memory or killed externally"
+    assert flow.failure_reason(137, [], 25 * 10**9) == (
+        "container killed (exit 137): host RAM ran out at the --memory limit of 25.0 GB")

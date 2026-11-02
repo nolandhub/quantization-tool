@@ -7,7 +7,7 @@ from qtool import plan
 
 def sig(**over):
     base = plan.checkpoint_signature("Qwen/Qwen3.5-4B", "INT4-W4A16", "HuggingFaceH4/ultrachat_200k:train_sft", 512,
-                                     2048, [], "0.13.0")
+                                     2048, [], "0.13.0", "bfloat16")
     return {**base, **over}
 
 
@@ -36,6 +36,17 @@ def test_checkpoint_states(tmp_path):
     assert plan.checkpoint_states(rd, {"INT8-W8A8": ["int8-w8a8"]}, wanted, force=True)[0].action == "rebuild"
 
 
+def test_compute_dtype_is_part_of_the_signature(tmp_path):
+    # float32 compute (SM < 8.0) and bfloat16 compute give different weights: never reuse one for the other
+    rd = tmp_path / "m"
+    write_ckpt(rd, "INT4-W4A16", sig(compute_dtype="float32"))
+    write_ckpt(rd, "INT8-W8A8", {k: v for k, v in sig(checkpoint="INT8-W8A8").items() if k != "compute_dtype"})
+    wanted = {"INT4-W4A16": sig(), "INT8-W8A8": sig(checkpoint="INT8-W8A8")}
+    states = plan.checkpoint_states(rd, {"INT4-W4A16": ["int4-w4a16"], "INT8-W8A8": ["int8-w8a8"]}, wanted, force=False)
+    assert [(s.action, s.diff) for s in states] == [("stale", ["compute_dtype: float32 → bfloat16"]),
+                                                    ("stale", ["compute_dtype: not recorded → bfloat16"])]
+
+
 def test_checkpoint_states_unreadable_meta(tmp_path):
     rd = tmp_path / "m"
     d = rd / "checkpoints" / "INT4-W4A16"
@@ -57,18 +68,18 @@ def test_checkpoint_states_meta_is_directory(tmp_path):
 def test_cached_result(tmp_path):
     p = tmp_path / "bf16_gsm8k.json"
     wanted = plan.eval_meta("Qwen/Qwen3.5-4B", "gsm8k", None, "qtool-eval:abc", "chat", "RTX 4070")
-    assert plan.cached_result(p, wanted) == (False, "cache: none, will run")
+    assert plan.cached_result(p, wanted) == (False, "none, will run")
     p.write_text(json.dumps({"qtool": {**wanted, "limit": 250}}))
-    assert plan.cached_result(p, wanted) == (False, "cache stale: eval-limit: 250 → full, will run")
+    assert plan.cached_result(p, wanted) == (False, "stale: eval-limit: 250 → full, will run")
     p.write_text(json.dumps({"qtool": wanted}))
-    assert plan.cached_result(p, wanted) == (True, "cache: valid, reused")
+    assert plan.cached_result(p, wanted) == (True, "valid, reused")
 
 
 def test_cached_result_unreadable(tmp_path):
     p = tmp_path / "bf16_gsm8k.json"
     p.write_text("{truncated")
     wanted = plan.eval_meta("Qwen/Qwen3.5-4B", "gsm8k", None, "qtool-eval:abc", "chat", "RTX 4070")
-    assert plan.cached_result(p, wanted) == (False, "cache unreadable, will run")
+    assert plan.cached_result(p, wanted) == (False, "unreadable, will run")
 
 
 def test_calib_key_is_stable_and_sensitive():

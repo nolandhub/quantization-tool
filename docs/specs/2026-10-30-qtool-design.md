@@ -43,8 +43,10 @@ llmcompressor), cờ runtime `VLLM_MARLIN_INPUT_DTYPE` của vLLM. qtool là l�
 - Không MXFP4, NVFP4A16 (NVFP4 chỉ weight), W8A16, INT4 W4A4, INT4 bất đối xứng / AWQ, recipe mixed-precision, checkpoint FP8 lưu sẵn.
   INT4 W4A4: vLLM không có kernel, Hopper/Blackwell bỏ tensor core INT4. INT4 bất đối xứng: Marlin W4A8 không nhận.
 - Không multi-GPU / tensor parallel.
-- Không eval trên SM 7.0 (V100): vLLM 0.28 bỏ SM 7.0, vLLM 0.18 (bản cuối có SM 7.0) không biết
-  Qwen3.5. V100 chỉ quantize (`--no-eval`), eval ở máy khác.
+- Không eval trên SM 7.0 (V100): vLLM 0.28 bỏ SM 7.0. vLLM 0.18 (bản cuối có SM 7.0) **chạy được** Qwen3.5
+  (kiểm 02/11 trên apollo: 4B và 9B fp16), nhưng trên SM 7.0 chỉ nhận INT4 dạng `gptq` (compressed-tensors WNA16 cần
+  SM ≥ 7.5) → checkpoint qtool không chạy được trên V100, và qtool không hỗ trợ image vLLM 0.18. V100 chỉ quantize
+  (`--no-eval`), eval ở máy khác.
 - Không kiểm định thống kê (McNemar, p-value). Theo cách làm gốc: bảng lm_eval có stderr + recovery %.
 - Không cài `flash-linear-attention` (transformers log `fast path is not available` → calib lớp GDN chạy torch thuần;
   có thể nhanh hơn nhưng chưa thử, ghi vào hướng mở rộng).
@@ -58,6 +60,9 @@ llmcompressor), cờ runtime `VLLM_MARLIN_INPUT_DTYPE` của vLLM. qtool là l�
 - Kiểm chứng thêm kiến trúc gated (Llama 3.x, Gemma 3) khi có `HF_TOKEN`.
 - Model cần `trust_remote_code`.
 - `flash-linear-attention` trong image compress để rút thời gian calib Qwen3.5.
+- Xuất định dạng `gptq` (qweight / qzeros / scales / g_idx) từ `INT4-W4A16` để chạy trên V100 với vLLM 0.18.
+  02/11: chưa cần — `Intel/Qwen3.5-9B-int4-AutoRound` (dạng GPTQ, quantize cả GDN) chạy trên V100: gsm8k −1.4 pp so với
+  fp16 (không có ý nghĩa thống kê), decode ×2.7 khi ít request, kernel `gptq_gemm` cho kết quả như Marlin.
 
 ## 3. Scheme
 

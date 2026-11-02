@@ -10,6 +10,8 @@ qtool runs the 4 steps of the [vLLM LLM Compressor guide](https://docs.vllm.ai/e
 for you: load the model, prepare calibration data, quantize, evaluate. It prints what each step is doing and ends
 with a table: accuracy before and after, the drop in points, and the size on disk.
 
+![qtool flow](qtool-flow.png)
+
 ## What you need
 
 - A Linux machine with an NVIDIA GPU (see [Which GPU for which scheme](#which-gpu-for-which-scheme)).
@@ -79,38 +81,38 @@ qtool quantize Qwen/Qwen3.5-4B --scheme int4-w4a16 --gpu 1
 
 ## Schemes
 
-| Scheme | Weights / activations | What it is |
-|---|---|---|
-| `int4-w4a16` | 4-bit / 16-bit | GPTQ, smallest checkpoint, widest GPU support |
-| `int4-w4a8-fp8` | 4-bit / FP8 | same checkpoint as `int4-w4a16`, faster kernel at runtime |
-| `int4-w4a8-int8` | 4-bit / INT8 | same checkpoint as `int4-w4a16`, faster kernel at runtime |
-| `int8-w8a8` | 8-bit / 8-bit | SmoothQuant + GPTQ |
-| `fp8-w8a8` | FP8 / FP8 | vLLM quantizes on the fly while loading: no checkpoint, nothing to quantize |
+| Scheme             | Weights / activations | What it is                                                                  |
+| ------------------ | --------------------- | --------------------------------------------------------------------------- |
+| `int4-w4a16`     | 4-bit / 16-bit        | GPTQ, smallest checkpoint, widest GPU support                               |
+| `int4-w4a8-fp8`  | 4-bit / FP8           | same checkpoint as `int4-w4a16`, faster kernel at runtime                 |
+| `int4-w4a8-int8` | 4-bit / INT8          | same checkpoint as `int4-w4a16`, faster kernel at runtime                 |
+| `int8-w8a8`      | 8-bit / 8-bit         | SmoothQuant + GPTQ                                                          |
+| `fp8-w8a8`       | FP8 / FP8             | vLLM quantizes on the fly while loading: no checkpoint, nothing to quantize |
 
 If you are not sure, start with `int4-w4a16`.
 
 ## Which GPU for which scheme
 
-| GPU generation (compute capability) | Examples | Quantize | Evaluate |
-|---|---|---|---|
-| Volta (7.0) | V100 | yes (float32, about 10× slower) | no: vLLM 0.28 has no kernels |
-| Turing (7.5) | T4, RTX 20xx | yes (float32) | `int8-w8a8` |
-| Ampere (8.0, 8.6) | A100, RTX 30xx | yes | `int4-w4a16`, `int8-w8a8`, `fp8-w8a8` (as weight-only) |
-| Ada (8.9) | L4, L40S, RTX 40xx | yes | all schemes |
-| Hopper (9.0) | H100, H200 | yes | all except `int4-w4a8-*` |
-| Blackwell (10.x, 12.x) | B200, RTX 50xx | yes | `int4-w4a16`, `fp8-w8a8` (+ `int4-w4a8-*` on 12.x) |
+| GPU generation (compute capability) | Examples           | Quantize                         | Evaluate                                                     |
+| ----------------------------------- | ------------------ | -------------------------------- | ------------------------------------------------------------ |
+| Volta (7.0)                         | V100               | yes (float32, about 10× slower) | no: vLLM 0.28 has no kernels                                 |
+| Turing (7.5)                        | T4, RTX 20xx       | yes (float32)                    | `int8-w8a8`                                                |
+| Ampere (8.0, 8.6)                   | A100, RTX 30xx     | yes                              | `int4-w4a16`, `int8-w8a8`, `fp8-w8a8` (as weight-only) |
+| Ada (8.9)                           | L4, L40S, RTX 40xx | yes                              | all schemes                                                  |
+| Hopper (9.0)                        | H100, H200         | yes                              | all except `int4-w4a8-*`                                   |
+| Blackwell (10.x, 12.x)              | B200, RTX 50xx     | yes                              | `int4-w4a16`, `fp8-w8a8` (+ `int4-w4a8-*` on 12.x)     |
 
 qtool checks this before it starts. If a scheme cannot run on your GPU it says why and suggests one that can.
 
 ## When something goes wrong
 
-| You see | What to do |
-|---|---|
-| `error: checkpoints/... was made with different settings` | You changed an option since the last run. Add `--force` to quantize again. |
-| `another qtool run (pid N) is active` | Only one qtool run at a time per user. Wait for it, or stop it. |
-| `gated or private model: export HF_TOKEN` | Accept the model's license on Hugging Face, then `export HF_TOKEN=...`. |
-| `... does not fit` / `host RAM ran out` | The model is too big for this GPU or this machine's RAM. Use a bigger machine or a smaller model. |
-| A scheme shows `FAILED` in the summary | The reason is printed above the table; the full log is in `~/qtool/runs/<model>/logs/`. |
+| You see                                                     | What to do                                                                                        |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `error: checkpoints/... was made with different settings` | You changed an option since the last run. Add `--force` to quantize again.                      |
+| `another qtool run (pid N) is active`                     | Only one qtool run at a time per user. Wait for it, or stop it.                                   |
+| `gated or private model: export HF_TOKEN`                 | Accept the model's license on Hugging Face, then `export HF_TOKEN=...`.                         |
+| `... does not fit` / `host RAM ran out`                 | The model is too big for this GPU or this machine's RAM. Use a bigger machine or a smaller model. |
+| A scheme shows `FAILED` in the summary                    | The reason is printed above the table; the full log is in `~/qtool/runs/<model>/logs/`.         |
 
 Exit codes: `0` all good, `1` at least one scheme failed, `2` wrong option or the machine cannot run it, `130` stopped with Ctrl-C.
 

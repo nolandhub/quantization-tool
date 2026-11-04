@@ -87,16 +87,24 @@ def test_calib_key_is_stable_and_sensitive():
     assert k == plan.calib_key("m", "c", 512, 2048) and len(k) == 12 and k != plan.calib_key("m", "c", 256, 2048)
 
 
+def test_data_free_signature_ignores_calibration_settings():
+    a = plan.checkpoint_signature("m", "FP8-DYNAMIC", "dataset-a", 512, 2048, [], "0.13.0", "bfloat16")
+    b = plan.checkpoint_signature("m", "FP8-DYNAMIC", "dataset-b", 256, 1024, [], "0.13.0", "bfloat16")
+    assert a == b and a["calib"] is None and a["calib_samples"] is None and a["calib_seq_len"] is None
+    assert plan.checkpoint_signature("m", "NVFP4", "dataset-a", 512, 2048, [], "0.13.0", "bfloat16")["calib"] == "dataset-a"
+
+
 def test_render_plan():
     states = [plan.CheckpointState("INT4-W4A16", ["int4-w4a16", "int4-w4a8-fp8"], "build", []),
-              plan.CheckpointState("INT8-W8A8", ["int8-w8a8"], "reuse", [])]
+              plan.CheckpointState("INT8-W8A8", ["int8-w8a8"], "reuse", []),
+              plan.CheckpointState("FP8-DYNAMIC", ["fp8-w8a8"], "build", [])]
     lines = plan.render_plan("Qwen/Qwen3.5-4B", states, ["int4-w4a16", "int4-w4a8-fp8", "int8-w8a8", "fp8-w8a8"],
                              ["gsm8k"], None, "cache: none, will run", no_eval=False)
     assert lines == [
         "Plan for Qwen/Qwen3.5-4B (4 schemes)",
         "  quantize  INT4-W4A16  -> int4-w4a16, int4-w4a8-fp8",
         "  reuse     INT8-W8A8   -> checkpoints/INT8-W8A8 (qtool.json matches)",
-        "  runtime   fp8-w8a8    (no checkpoint, vLLM quantizes to FP8 at load time)",
+        "  quantize  FP8-DYNAMIC -> fp8-w8a8",
         "  eval      bf16 baseline (cache: none, will run)",
         "  eval      int4-w4a16, int4-w4a8-fp8, int8-w8a8, fp8-w8a8   tasks: gsm8k (full)",
     ]

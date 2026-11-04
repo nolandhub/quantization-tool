@@ -15,17 +15,16 @@ def test_parse_schemes_rejects_unknown_and_lists_groups():
     assert str(e.value) == "unknown scheme 'int4-w4a8'.\n" + schemes.scheme_help()
 
 
-def test_scheme_help_lists_the_three_groups():
+def test_scheme_help_lists_the_two_groups():
     assert schemes.scheme_help() == (
         "schemes that build a checkpoint:\n"
         "  int4-w4a16      INT4 weights, 16-bit activations (checkpoint INT4-W4A16)\n"
         "  int8-w8a8       INT8 weights and activations (checkpoint INT8-W8A8)\n"
         "  nvfp4-w4a4      FP4 weights and activations (checkpoint NVFP4)\n"
+        "  fp8-w8a8        FP8 weights, FP8 activations at runtime (checkpoint FP8-DYNAMIC)\n"
         "schemes that reuse INT4-W4A16 (quantized once, no extra checkpoint):\n"
         "  int4-w4a8-fp8   INT4 weights, FP8 activations at runtime (Marlin)\n"
-        "  int4-w4a8-int8  INT4 weights, INT8 activations at runtime (Marlin)\n"
-        "no checkpoint, vLLM quantizes at load time:\n"
-        "  fp8-w8a8        FP8 weights and activations")
+        "  int4-w4a8-int8  INT4 weights, INT8 activations at runtime (Marlin)")
 
 
 def test_groups_cover_exactly_the_schemes_in_order():
@@ -39,9 +38,14 @@ def test_parse_schemes_rejects_empty():
         schemes.parse_schemes(" , ")
 
 
-def test_checkpoints_are_shared_and_fp8_has_none():
+def test_checkpoints_are_shared_and_fp8_has_its_own():
     got = schemes.checkpoints_for(["int4-w4a8-fp8", "int4-w4a16", "fp8-w8a8", "int8-w8a8"])
-    assert got == {"INT4-W4A16": ["int4-w4a8-fp8", "int4-w4a16"], "INT8-W8A8": ["int8-w8a8"]}
+    assert got == {"INT4-W4A16": ["int4-w4a8-fp8", "int4-w4a16"], "FP8-DYNAMIC": ["fp8-w8a8"], "INT8-W8A8": ["int8-w8a8"]}
+
+
+def test_only_fp8_dynamic_is_data_free():
+    assert [c for c in schemes.CHECKPOINTS if schemes.data_free(c)] == ["FP8-DYNAMIC"]
+    assert schemes.CHECKPOINTS["FP8-DYNAMIC"]["recipe"] == "QuantizationModifier targets=Linear scheme=FP8_DYNAMIC"
 
 
 def test_nvfp4_has_its_own_checkpoint():

@@ -1,4 +1,4 @@
-# ABOUTME: Static tables from spec §3: the 6 schemes, the 3 checkpoints they share, and the eval capability
+# ABOUTME: Static tables from spec §3: the 6 schemes, the 4 checkpoints they share, and the eval capability
 # ABOUTME: matrix per GPU compute capability (SM). Pure data plus lookups; every hardware rule lives here.
 from dataclasses import dataclass, field
 
@@ -6,10 +6,9 @@ from dataclasses import dataclass, field
 @dataclass(frozen=True)
 class Scheme:
     name: str
-    checkpoint: str | None  # None: no checkpoint, vLLM quantizes the BF16 model online
+    checkpoint: str
     row: str  # capability-matrix row
     env: dict = field(default_factory=dict)
-    quantization: str | None = None
 
 
 SCHEMES = {s.name: s for s in [
@@ -18,7 +17,7 @@ SCHEMES = {s.name: s for s in [
     Scheme("int4-w4a8-int8", "INT4-W4A16", "int4-w4a8", {"VLLM_MARLIN_INPUT_DTYPE": "int8"}),
     Scheme("int8-w8a8", "INT8-W8A8", "int8-w8a8"),
     Scheme("nvfp4-w4a4", "NVFP4", "nvfp4-w4a4"),
-    Scheme("fp8-w8a8", None, "fp8-w8a8", quantization="fp8"),
+    Scheme("fp8-w8a8", "FP8-DYNAMIC", "fp8-w8a8"),
 ]}
 
 # llmcompressor preset per checkpoint and how many sequential passes oneshot makes (SmoothQuant adds one)
@@ -27,6 +26,8 @@ CHECKPOINTS = {
     "INT8-W8A8": {"preset": "W8A8", "passes": 2,
                   "recipe": "SmoothQuantModifier smoothing_strength=0.8 + GPTQModifier targets=Linear scheme=W8A8"},
     "NVFP4": {"preset": "NVFP4", "recipe": "QuantizationModifier targets=Linear scheme=NVFP4", "passes": 1},
+    "FP8-DYNAMIC": {"preset": "FP8_DYNAMIC", "recipe": "QuantizationModifier targets=Linear scheme=FP8_DYNAMIC",
+                    "passes": 1, "data_free": True},
 }
 
 OK, WARN, NO = "ok", "warn", "no"
@@ -56,8 +57,8 @@ VERIFIED = {(row, "8.9") for row in MATRIX} | {("quantize", "7.0")}
 ALTERNATIVES = {"int8-w8a8": ["fp8-w8a8", "int4-w4a16"], "fp8-w8a8": ["int8-w8a8", "int4-w4a16"],
                 "int4-w4a8": ["int4-w4a16", "int8-w8a8"], "nvfp4-w4a4": ["int4-w4a16"],
                 "int4-w4a16": ["int8-w8a8", "fp8-w8a8"]}
-GROUPS = {"build a checkpoint": ["int4-w4a16", "int8-w8a8", "nvfp4-w4a4"],
-          "reuse INT4-W4A16": ["int4-w4a8-fp8", "int4-w4a8-int8"], "no checkpoint": ["fp8-w8a8"]}
+GROUPS = {"build a checkpoint": ["int4-w4a16", "int8-w8a8", "nvfp4-w4a4", "fp8-w8a8"],
+          "reuse INT4-W4A16": ["int4-w4a8-fp8", "int4-w4a8-int8"]}
 
 
 @dataclass(frozen=True)
@@ -100,6 +101,11 @@ def alternative(scheme: str, cc: str) -> str | None:
     return None
 
 
+def data_free(ckpt: str) -> bool:
+    """True when the recipe needs no calibration data: it only rounds weights."""
+    return CHECKPOINTS[ckpt].get("data_free", False)
+
+
 def compute_dtype(cc: str, requested: str) -> str:
     if requested != "auto":
         return requested
@@ -112,11 +118,10 @@ def scheme_help() -> str:
         "  int4-w4a16      INT4 weights, 16-bit activations (checkpoint INT4-W4A16)\n"
         "  int8-w8a8       INT8 weights and activations (checkpoint INT8-W8A8)\n"
         "  nvfp4-w4a4      FP4 weights and activations (checkpoint NVFP4)\n"
+        "  fp8-w8a8        FP8 weights, FP8 activations at runtime (checkpoint FP8-DYNAMIC)\n"
         "schemes that reuse INT4-W4A16 (quantized once, no extra checkpoint):\n"
         "  int4-w4a8-fp8   INT4 weights, FP8 activations at runtime (Marlin)\n"
-        "  int4-w4a8-int8  INT4 weights, INT8 activations at runtime (Marlin)\n"
-        "no checkpoint, vLLM quantizes at load time:\n"
-        "  fp8-w8a8        FP8 weights and activations"
+        "  int4-w4a8-int8  INT4 weights, INT8 activations at runtime (Marlin)"
     )
 
 
@@ -138,7 +143,5 @@ def parse_schemes(text: str) -> list[str]:
 def checkpoints_for(schemes: list[str]) -> dict[str, list[str]]:
     out: dict[str, list[str]] = {}
     for s in schemes:
-        ckpt = SCHEMES[s].checkpoint
-        if ckpt:
-            out.setdefault(ckpt, []).append(s)
+        out.setdefault(SCHEMES[s].checkpoint, []).append(s)
     return out

@@ -21,8 +21,10 @@ def runs_dir(output_dir: Path, model: str) -> Path:
 
 def checkpoint_signature(model: str, ckpt: str, calib: str, samples: int, seq_len: int, ignore: list[str],
                          llmcompressor: str, compute_dtype: str) -> dict:
+    free = schemes.data_free(ckpt)  # calibration options cannot change this checkpoint, so they must not stale it
     return {"model": model, "checkpoint": ckpt, "recipe": schemes.CHECKPOINTS[ckpt]["recipe"], "ignore": sorted(ignore),
-            "calib": calib, "calib_samples": samples, "calib_seq_len": seq_len, "llmcompressor": llmcompressor,
+            "calib": None if free else calib, "calib_samples": None if free else samples,
+            "calib_seq_len": None if free else seq_len, "llmcompressor": llmcompressor,
             "compute_dtype": compute_dtype}
 
 
@@ -104,10 +106,6 @@ def render_plan(model: str, states: list[CheckpointState], schemes_: list[str], 
             out.append(f"  reuse     {st.name:<11} -> checkpoints/{st.name} (qtool.json matches)")
         else:
             out.append(f"  stale     {st.name:<11} -> checkpoints/{st.name} differs: " + "; ".join(st.diff))
-    for s in schemes_:
-        if schemes.SCHEMES[s].quantization:
-            out.append(f"  runtime   {s:<11} (no checkpoint, vLLM quantizes to "
-                       f"{schemes.SCHEMES[s].quantization.upper()} at load time)")
     if no_eval:
         out.append("  eval      skipped (--no-eval)")
     else:

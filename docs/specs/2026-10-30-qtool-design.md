@@ -1,6 +1,6 @@
 # qtool — Design Spec
 
-Ngày: 2026-10-30 · Trạng thái: bản 3.2 (spike 1 + 2, `docs/spike/2026-10-30-findings.md`; 3.1 = chi tiết kiểm chứng lúc viết plan 2; 3.2 = NVFP4 + scheme chia nhóm theo checkpoint, mục 11), Nhân đã duyệt v3 · Repo: `~/ws-DoNhan/qtool` (local) · máy phát triển và kiểm chứng: `rtx4070:~/qtool` (RTX 4070 Ti SUPER, SM 8.9)
+Ngày: 2026-10-30 · Trạng thái: bản 3.3 (spike 1 + 2, `docs/spike/2026-10-30-findings.md`; 3.1 = chi tiết kiểm chứng lúc viết plan 2; 3.2 = NVFP4 + scheme chia nhóm theo checkpoint, mục 11; 3.3 = `fp8-w8a8` lưu checkpoint `FP8-DYNAMIC`, mục 11), Nhân đã duyệt v3 · Repo: `~/ws-DoNhan/qtool` (local) · máy phát triển và kiểm chứng: `rtx4070:~/qtool` (RTX 4070 Ti SUPER, SM 8.9)
 
 ## 1. Mục tiêu
 
@@ -40,7 +40,7 @@ llmcompressor), cờ runtime `VLLM_MARLIN_INPUT_DTYPE` của vLLM. qtool là l�
 
 - Không dừng / bật container hay service nào. Dev tự làm; tool chỉ kiểm tra và báo.
 - Không tích hợp qbench, voice, rag hay bất cứ gì của `qwen-bench/`.
-- Không MXFP4, NVFP4A16 (NVFP4 chỉ weight), W8A16, INT4 W4A4, INT4 bất đối xứng / AWQ, recipe mixed-precision, checkpoint FP8 lưu sẵn.
+- Không MXFP4, NVFP4A16 (NVFP4 chỉ weight), W8A16, INT4 W4A4, INT4 bất đối xứng / AWQ, recipe mixed-precision.
   INT4 W4A4: vLLM không có kernel, Hopper/Blackwell bỏ tensor core INT4. INT4 bất đối xứng: Marlin W4A8 không nhận.
 - Không multi-GPU / tensor parallel.
 - Không eval trên SM 7.0 (V100): vLLM 0.28 bỏ SM 7.0. vLLM 0.18 (bản cuối có SM 7.0) **chạy được** Qwen3.5
@@ -55,7 +55,6 @@ llmcompressor), cờ runtime `VLLM_MARLIN_INPUT_DTYPE` của vLLM. qtool là l�
 
 - Preset mixed-precision theo nhóm layer (giữ attention/GDN 8 bit, MLP 4 bit), kiểu `RedHatAI/GLM-5.3-MXFP4xFP8`.
 - Tập calib tiếng Việt hoặc trộn (`--calib-mix`).
-- Recipe `FP8_DYNAMIC` lưu checkpoint.
 - Multi-GPU (tensor parallel) cho model không vừa 1 GPU.
 - Kiểm chứng thêm kiến trúc gated (Llama 3.x, Gemma 3) khi có `HF_TOKEN`.
 - Model cần `trust_remote_code`.
@@ -76,7 +75,7 @@ Mỗi scheme là 1 dòng trong bảng kết quả; checkpoint là việc của q
 | `nvfp4-w4a4`     | tạo checkpoint           | FP4 E2M1 g16  | FP4 E2M1   | build `NVFP4`: `QuantizationModifier(targets="Linear", scheme="NVFP4")` (scale nhóm FP8 E4M3 + global scale FP32)   | mặc định                              |
 | `int4-w4a8-fp8`  | dùng lại `INT4-W4A16` | INT4          | FP8        | dùng chung `INT4-W4A16` (quantize 1 lần)                                                                             | `VLLM_MARLIN_INPUT_DTYPE=fp8`          |
 | `int4-w4a8-int8` | dùng lại `INT4-W4A16` | INT4          | INT8       | dùng chung `INT4-W4A16` (quantize 1 lần)                                                                             | `VLLM_MARLIN_INPUT_DTYPE=int8`         |
-| `fp8-w8a8`       | không checkpoint         | FP8           | FP8        | không có: vLLM quantize model BF16 lúc load                                                                           | model BF16 gốc + `--quantization fp8` |
+| `fp8-w8a8`       | tạo checkpoint           | FP8 per-channel | FP8 động | build `FP8-DYNAMIC`: `QuantizationModifier(targets="Linear", scheme="FP8_DYNAMIC")`, không cần calib (recipe của `RedHatAI/*-FP8-dynamic`) | mặc định |
 
 Ghi chú:
 
@@ -85,8 +84,7 @@ Ghi chú:
 - W4A8 trên Ada = checkpoint INT4 đối xứng g128 + Marlin lượng tử hoá activation động lúc chạy
   (đã kiểm chứng trong bake-off 26/10, `qwen-bench/docs/handoff-2026-10-27.md`). Checkpoint gắn
   nhãn `CompressedTensorsW4A8Fp8` đòi SM 9.0 nên không dùng. INT4 bất đối xứng (zero-point, AWQ) không chạy được W4A8.
-- `fp8-w8a8` vẫn là quantize thật, chỉ là vLLM làm lúc load (scale động, không cần calib); qtool không chạy step 1–3 cho nó.
-  Giữ trong `quantize` để FP8 nằm cùng bảng so sánh với các scheme khác.
+- `fp8-w8a8` chỉ làm tròn weight, activation tính scale lúc chạy, nên qtool bỏ step 2 và chữ ký checkpoint không chứa tham số calib. Muốn FP8 không checkpoint thì dùng `qtool eval --quantization fp8`.
 - Quantize luôn đi từ model gốc chưa quantize.
 - `int4-w4a8-int8` đã chạy thật trên SM 8.9 (spike Q5: gsm8k limit 50 → 0.80).
 - NVFP4 và INT4 là hai kiểu số khác nhau (lưới INT4 đều −8…7, scale BF16 / 128 weight ≈ 4.13 bit/weight;
@@ -175,7 +173,7 @@ positional:
 required:
   --scheme SCHEMES         phân tách bằng dấu phẩy: int4-w4a16, int8-w8a8, nvfp4-w4a4,
                            int4-w4a8-fp8, int4-w4a8-int8, fp8-w8a8
-                           (--help in theo 3 nhóm: build a checkpoint / reuse INT4-W4A16 / no checkpoint)
+                           (--help in theo 2 nhóm: build a checkpoint / reuse INT4-W4A16)
 
 calibration (step 2):
   --calib SOURCE           HF dataset id[:split] hoặc file .jsonl; mỗi dòng có cột `messages` (chat) hoặc `text`
@@ -405,7 +403,7 @@ Kế hoạch in đủ mọi lượt, kể cả lượt không tạo checkpoint, 
 Plan for Qwen/Qwen3.5-4B (3 schemes)
   quantize  INT4-W4A16  -> int4-w4a8-fp8
   quantize  NVFP4       -> nvfp4-w4a4
-  runtime   fp8-w8a8    (no checkpoint, vLLM quantizes to FP8 at load time)
+  quantize  FP8-DYNAMIC -> fp8-w8a8
   eval      bf16 baseline (cache: none, will run)
   eval      int4-w4a8-fp8, nvfp4-w4a4, fp8-w8a8   tasks: gsm8k (full)
 ```
@@ -588,3 +586,5 @@ cho mọi kiến trúc, thử trên Phi-4-mini, OLMoE, SmolVLM2. Danh sách câu
 - Đã cân nhắc và **không làm**: thay `int4-w4a8-*` bằng cờ `quantize --act` (buộc eval thêm W4A16 khi chỉ cần W4A8);
   bỏ `fp8-w8a8` khỏi `quantize` (mất bảng so sánh chung một lượt).
 - Ngoài phạm vi ghi rõ thêm: NVFP4A16, MXFP4, INT4 W4A4, INT4 bất đối xứng / AWQ (mục 2).
+- **3.3 (04/11): `fp8-w8a8` lưu checkpoint `FP8-DYNAMIC`** theo recipe `RedHatAI/*-FP8-dynamic` (không cần calib, bỏ step 2), thay cho FP8 online;
+  nhóm "không checkpoint" không còn. FP8 online vẫn có qua `qtool eval --quantization fp8`.

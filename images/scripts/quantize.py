@@ -1,6 +1,7 @@
 # ABOUTME: Runs inside qtool-compress: steps 1-3 for one checkpoint (load model, calibration data, oneshot + save).
 # ABOUTME: Prints `@qtool {json}` events for the host; library output (tqdm, loguru) passes through untouched.
 import argparse
+import contextlib
 import json
 import os
 import shutil
@@ -12,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from recipe import derive, is_multimodal, loader_name, orig_dtype, remote_code_required, render_calib  # noqa: E402
 
-PRESETS = {"INT4-W4A16": "W4A16", "INT8-W8A8": "W8A8", "NVFP4": "NVFP4"}
+PRESETS = {"INT4-W4A16": "W4A16", "INT8-W8A8": "W8A8", "NVFP4": "NVFP4", "FP8-DYNAMIC": "FP8_DYNAMIC"}
 # GPTQ dampening: 0.05 for W4A16 matches RedHat's published recipe (docs/spike/2026-11-01-acceptance-followup.md);
 # W8A8 keeps llmcompressor's default 0.01 (no evidence either way); NVFP4 is round-to-nearest, no GPTQ
 DAMPENING = {"W4A16": 0.05, "W8A8": 0.01}
@@ -22,6 +23,31 @@ SIDE_FILES = (".json", ".jinja", ".txt", ".model")
 
 def emit(event: str, **fields) -> None:
     print("@qtool " + json.dumps({"event": event, **fields}, default=str), flush=True)
+
+
+@contextlib.contextmanager
+def exact_offset_norms():
+    """Keep `1 + weight` in float64 during oneshot. llmcompressor 0.13 keeps it in the model dtype, and BF16 has only
+    1/128 steps in [1, 2), so every Qwen3_5RMSNorm weight comes back rounded even though nothing quantizes it.
+    float32 is not enough: it still rounds very small weights."""
+    import torch
+    from llmcompressor.modeling.offset_norm import CalibrationOffsetNorm
+
+    upstream_init, upstream_restore = CalibrationOffsetNorm.__init__, CalibrationOffsetNorm.restore
+
+    def init(self, original, config):
+        upstream_init(self, original, config)
+        self.weight = torch.nn.Parameter(1.0 + original.weight.data.double())
+
+    def restore(self, original):
+        original.weight.data = (self.weight.data - 1.0).to(self._orig_dtype)
+        return original
+
+    CalibrationOffsetNorm.__init__, CalibrationOffsetNorm.restore = init, restore
+    try:
+        yield
+    finally:
+        CalibrationOffsetNorm.__init__, CalibrationOffsetNorm.restore = upstream_init, upstream_restore
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -178,18 +204,21 @@ def main(argv=None) -> int:
              hint="check --ignore and the architecture")
         return EXIT_REFUSED
 
-    emit("step", n=2)
     tok = transformers.AutoTokenizer.from_pretrained(a.model)
-    ds, stats = calibration(a, tok)
-    emit("calib", **stats)
+    preset = PRESETS[a.checkpoint]
+    data_free = preset == "FP8_DYNAMIC"  # same recipe as RedHatAI/*-FP8-dynamic: oneshot without a dataset
+    ds, stats = None, None
+    if not data_free:
+        emit("step", n=2)
+        ds, stats = calibration(a, tok)
+        emit("calib", **stats)
 
     emit("step", n=3)
     from llmcompressor import oneshot
     from llmcompressor.modifiers.quantization import GPTQModifier, QuantizationModifier
     from llmcompressor.modifiers.transform import SmoothQuantModifier
 
-    preset = PRESETS[a.checkpoint]
-    if preset == "NVFP4":
+    if preset in ("NVFP4", "FP8_DYNAMIC"):
         recipe = QuantizationModifier(targets="Linear", scheme=preset, ignore=r["ignore"])
     else:
         gptq = GPTQModifier(targets="Linear", scheme=preset, ignore=r["ignore"], dampening_frac=DAMPENING[preset])
@@ -198,8 +227,12 @@ def main(argv=None) -> int:
     if cuda:
         torch.cuda.reset_peak_memory_stats()
     t0 = time.time()
-    oneshot(model=model, processor=tok, dataset=ds, recipe=recipe, max_seq_length=a.seq_len,
-            num_calibration_samples=len(ds), sequential_targets=[r["sequential_target"]])
+    if data_free:
+        with exact_offset_norms():
+            oneshot(model=model, recipe=recipe)
+    else:
+        oneshot(model=model, processor=tok, dataset=ds, recipe=recipe, max_seq_length=a.seq_len,
+                num_calibration_samples=len(ds), sequential_targets=[r["sequential_target"]])
     oneshot_seconds = round(time.time() - t0, 1)
     emit("oneshot", seconds=oneshot_seconds, peak_gpu_bytes=torch.cuda.max_memory_allocated() if cuda else None)
 
@@ -221,7 +254,7 @@ def main(argv=None) -> int:
     (out / "qtool.json").write_text(json.dumps({
         "signature": a.signature,
         "recipe": {k: r[k] for k in ("ignore", "sequential_target", "num_layers", "linears_quantized")},
-        "calib": {k: v for k, v in stats.items() if k != "cached"},
+        "calib": {k: v for k, v in stats.items() if k != "cached"} if stats else None,
         "compute_dtype": a.compute_dtype, "cast": cast, "oneshot_seconds": oneshot_seconds,
         "versions": {"llmcompressor": llmcompressor.__version__, "transformers": transformers.__version__,
                      "torch": torch.__version__, "compressed_tensors": compressed_tensors.__version__},

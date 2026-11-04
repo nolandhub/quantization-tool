@@ -70,6 +70,41 @@ def test_nvfp4_qwen3_5_saves_fp4_weights_and_activations(capsys, tiny_dir, calib
     assert meta["signature"]["checkpoint"] == "NVFP4"
 
 
+def test_fp8_dynamic_needs_no_calibration_data(capsys, tiny_dir, tmp_path):
+    out = tmp_path / "FP8-DYNAMIC"
+    code, evs = run(capsys, tiny_dir("qwen3_5"), out, tmp_path / "does-not-exist.jsonl", tmp_path / "calib",
+                    checkpoint="FP8-DYNAMIC")
+    assert code == 0
+    assert [e["n"] for e in evs if e["event"] == "step"] == [1, 3]
+    assert "calib" not in by_name(evs) and not (tmp_path / "calib").exists()
+    cfg = json.loads((out / "config.json").read_text())["quantization_config"]
+    assert cfg["format"] == "float-quantized"
+    group = cfg["config_groups"][next(iter(cfg["config_groups"]))]
+    assert group["weights"]["type"] == "float" and group["weights"]["num_bits"] == 8
+    assert group["weights"]["strategy"] == "channel" and group["weights"]["dynamic"] is False
+    assert group["input_activations"]["type"] == "float" and group["input_activations"]["dynamic"] is True
+    recipe = (out / "recipe.yaml").read_text()
+    assert "QuantizationModifier" in recipe and "scheme: FP8_DYNAMIC" in recipe
+    assert "F8_E4M3" in tensor_dtypes(out) and (out / "tokenizer_config.json").exists()
+
+
+def test_exact_offset_norms_keeps_rmsnorm_weights_bit_exact():
+    import quantize
+    import torch
+    from llmcompressor.modeling.offset_norm import CalibrationOffsetNorm
+    from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5RMSNorm
+
+    values = torch.tensor([0.66796875, 0.38671875, 0.255859375, 1.5e-8], dtype=torch.bfloat16)
+    assert not torch.equal((1.0 + values.float()) - 1.0, values.float())  # float32 is not enough either
+    norm = Qwen3_5RMSNorm(4)
+    norm.weight.data = values.clone()
+    assert not torch.equal(CalibrationOffsetNorm(norm, None).restore(norm).weight.data, values)  # the upstream rounding
+    norm.weight.data = values.clone()
+    with quantize.exact_offset_norms():
+        restored = CalibrationOffsetNorm(norm, None).restore(norm)
+    assert torch.equal(restored.weight.data, values) and restored.weight.dtype == torch.bfloat16
+
+
 def test_calib_cache_is_reused(capsys, tiny_dir, calib_jsonl, tmp_path):
     cache = tmp_path / "calib"
     run(capsys, tiny_dir("phi3"), tmp_path / "a", calib_jsonl, cache)

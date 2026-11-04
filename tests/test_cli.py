@@ -123,9 +123,9 @@ def test_quantize_help_shows_scheme_groups(capsys):
         cli.main(["quantize", "--help"])
     out = capsys.readouterr().out
     assert e.value.code == 0 and "--act" not in out and "nvfp4-w4a4" in out
-    for heading in ["schemes that build a checkpoint:", "schemes that reuse INT4-W4A16 (quantized once, no extra checkpoint):",
-                    "no checkpoint, vLLM quantizes at load time:"]:
+    for heading in ["schemes that build a checkpoint:", "schemes that reuse INT4-W4A16 (quantized once, no extra checkpoint):"]:
         assert heading in out
+    assert "vLLM quantizes at load time" not in out
 
 
 def test_quantize_has_no_act_option(capsys):
@@ -211,6 +211,13 @@ def test_stale_checkpoint_needs_force(env):
     assert "re-run with --force to rebuild it" in text
     code, text = run("quantize", "Qwen/Qwen3.5-4B", "--scheme", "int4-w4a16", "--no-eval", "--calib-samples", "256", "--force")
     assert code == 0
+
+
+def test_calibration_options_do_not_stale_a_data_free_checkpoint(env):
+    system, run = env
+    assert run("quantize", "Qwen/Qwen3.5-4B", "--scheme", "fp8-w8a8", "--no-eval")[0] == 0
+    code, text = run("quantize", "Qwen/Qwen3.5-4B", "--scheme", "fp8-w8a8", "--no-eval", "--calib-samples", "256")
+    assert code == 0 and "different settings" not in text
 
 
 def test_ctrl_c_exits_130_and_releases_lock(env):

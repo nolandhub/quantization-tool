@@ -142,6 +142,21 @@ def test_eval_failure_quotes_the_vllm_error(setup):
     assert "  int8-w8a8       FAILED" in text and "  fp8-w8a8        OK" in text
 
 
+def test_fp8_checkpoint_is_built_without_calibration_and_evaluated(setup):
+    s, docker, out = setup
+    assert flow.run_quantize(s, quantize_run(s, ["fp8-w8a8"])) == 0, out.getvalue()
+    text = out.getvalue()
+    assert "══════ [2/4] Preparing calibration data " in text
+    assert "  calibration  : not needed: weights are rounded, activation scales are computed at runtime" in text
+    assert "══════ [3/4] Quantizing FP8-DYNAMIC " in text
+    assert "  recipe       : QuantizationModifier targets=Linear scheme=FP8_DYNAMIC\n" in text
+    assert "  quantization : compressed-tensors · FLOAT8 W8A8 symmetric" in text
+    assert "  checkpoint   : checkpoints/FP8-DYNAMIC" in text
+    assert (s.rd / "checkpoints" / "FP8-DYNAMIC" / "qtool.json").exists()
+    fp8 = [sp for sp in docker.specs if sp.command[0] == "lm_eval" and "/runs/checkpoints/FP8-DYNAMIC" in arg(sp.command, "--model_args")]
+    assert len(fp8) == 1 and "quantization=" not in arg(fp8[0].command, "--model_args")
+
+
 def test_nvfp4_checkpoint_is_quantized_and_evaluated(setup):
     s, docker, out = setup
     assert flow.run_quantize(s, quantize_run(s, ["nvfp4-w4a4"])) == 0

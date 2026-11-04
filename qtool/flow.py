@@ -142,7 +142,8 @@ def _short(pattern: str) -> str:
 def _show_recipe(c: Console, ckpt: str, r: dict | None) -> None:
     if not r:
         return
-    c.kv("recipe", f"{schemes.CHECKPOINTS[ckpt]['recipe']} · sequential {r['sequential_target']}")
+    sequential = "" if schemes.data_free(ckpt) else f" · sequential {r['sequential_target']}"
+    c.kv("recipe", schemes.CHECKPOINTS[ckpt]["recipe"] + sequential)
     c.kv("ignore", " · ".join(f"{_short(p)} ({why})" for p, why in r["why"].items()))
     groups = sorted({x.split(".N.", 1)[1].split(".")[0] for x in r["quantized_sample"] if ".N." in x})
     c.kv("quantized", f"{r['linears_quantized']} Linear ({', '.join(g + '.*' for g in groups)})")
@@ -170,7 +171,12 @@ def quantize_checkpoint(s: Session, o: QuantizeOptions, ckpt: str, signature: di
     c.kv("source", o.model)
 
     def show_progress():
-        if st["step"] != 3 or not progress.total or st["oneshot_done"]:
+        if st["step"] != 3 or st["oneshot_done"]:
+            return
+        if schemes.data_free(ckpt):  # no calibration, so llmcompressor prints no (N/33) progress
+            c.status(f"rounding weights · elapsed {fmt_duration(s.clock() - st['t'])}")
+            return
+        if not progress.total:
             return
         elapsed, f = s.clock() - st["t"], progress.fraction(passes)
         eta = f" · est. {fmt_duration(elapsed * (1 - f) / f)} left" if f >= 0.02 else ""
@@ -187,6 +193,9 @@ def quantize_checkpoint(s: Session, o: QuantizeOptions, ckpt: str, signature: di
                 s.header("[2/4] Preparing calibration data")
                 c.kv("source", f"{o.calib} · {o.samples} samples · seed 42")
             else:
+                if schemes.data_free(ckpt):
+                    s.header("[2/4] Preparing calibration data")
+                    c.kv("calibration", "not needed: weights are rounded, activation scales are computed at runtime")
                 s.header(f"[3/4] Quantizing {ckpt}")
                 _show_recipe(c, ckpt, st["recipe"])
         elif kind == "config":
@@ -460,19 +469,15 @@ def run_quantize(s: Session, r: QuantizeRun) -> int:
         if failed and r.on_error == "stop":
             break
         sc = schemes.SCHEMES[name]
-        if sc.checkpoint and not ok.get(sc.checkpoint):
+        if not ok.get(sc.checkpoint):
             rows.append(report.Row(name, "SKIPPED", note=f"{sc.checkpoint} failed"))
             continue
-        if sc.checkpoint:
-            path = s.rd / "checkpoints" / sc.checkpoint
-            shared = sum(1 for x in r.schemes if schemes.SCHEMES[x].checkpoint == sc.checkpoint) > 1
-            qc = json.loads((path / "config.json").read_text()).get("quantization_config")
-            model, weight = str(path), sizes[sc.checkpoint]
-            info = [("checkpoint", f"checkpoints/{sc.checkpoint}" + (" (shared)" if shared else "")),
-                    ("quantization", quantization_text(qc))]
-        else:
-            shared, model, weight = False, r.model, r.params if r.params else None  # FP8 online: ~1 byte per param
-            info = [("model", f"{r.model} (BF16)"), ("quantization", f"vLLM online {sc.quantization}")]
+        path = s.rd / "checkpoints" / sc.checkpoint
+        shared = sum(1 for x in r.schemes if schemes.SCHEMES[x].checkpoint == sc.checkpoint) > 1
+        qc = json.loads((path / "config.json").read_text()).get("quantization_config")
+        model, weight = str(path), sizes[sc.checkpoint]
+        info = [("checkpoint", f"checkpoints/{sc.checkpoint}" + (" (shared)" if shared else "")),
+                ("quantization", quantization_text(qc))]
         if sc.env:
             info.append(("runtime env", " ".join(f"{k}={v}" for k, v in sc.env.items())))
         skip = preflight.check_eval_fit(name, weight, s.gpu)
@@ -482,7 +487,7 @@ def run_quantize(s: Session, r: QuantizeRun) -> int:
             rows.append(report.Row(name, "SKIPPED", size_bytes=weight, note="does not fit"))
             continue
         metas = lambda t, name=name: plan.eval_meta(name, t, r.limit, s.eval_image, r.mode, s.gpu.name)  # noqa: E731
-        job = EvalJob(name, model, name, sc.env, sc.quantization, info, expect_marlin=bool(sc.env))
+        job = EvalJob(name, model, name, sc.env, None, info, expect_marlin=bool(sc.env))
         res = eval_job(s, job, r.tasks, r.limit, r.mode, metas, baseline=base)
         rows.append(report.Row(name, res.status, parsers.primary(res.metrics), weight, "shared" if shared else ""))
         if res.status != "OK":

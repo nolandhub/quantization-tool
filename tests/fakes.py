@@ -12,6 +12,11 @@ W4A16_QC = {"quant_method": "compressed-tensors", "format": "pack-quantized",
 W8A8_QC = {"quant_method": "compressed-tensors", "format": "int-quantized",
            "config_groups": {"group_0": {"weights": {"num_bits": 8, "type": "int", "symmetric": True, "strategy": "channel"},
                                          "input_activations": {"num_bits": 8, "type": "int", "dynamic": True}}}}
+FP8_DYNAMIC_QC = {"quant_method": "compressed-tensors", "format": "float-quantized",
+                  "config_groups": {"group_0": {"weights": {"num_bits": 8, "type": "float", "symmetric": True,
+                                                            "strategy": "channel"},
+                                                "input_activations": {"num_bits": 8, "type": "float", "dynamic": True,
+                                                                      "strategy": "token"}}}}
 NVFP4_QC = {"quant_method": "compressed-tensors", "format": "nvfp4-pack-quantized",
             "config_groups": {"group_0": {"weights": {"num_bits": 4, "type": "float", "symmetric": True,
                                                       "strategy": "tensor_group", "group_size": 16},
@@ -79,23 +84,26 @@ class FakeDocker:
                        "re:.*linear_attn.*": "hybrid linear-attention / SSM mixer"},
                   sequential_target="Qwen3_5DecoderLayer", num_layers=32, num_experts=None, mtp=True, linears_total=347,
                   linears_quantized=128, quantized_sample=["model.language_model.layers.N.mlp.down_proj",
-                                                           "model.language_model.layers.N.self_attn.q_proj"]),
-               ev("step", n=2)]
-        if mode == "fail-step2":
-            return out + ["Traceback (most recent call last):", "datasets.exceptions.DatasetNotFoundError: no such dataset"], 1
-        out += [ev("calib", source="HuggingFaceH4/ultrachat_200k:train_sft", template="chat_template(str)", n=512, min=199,
-                   median=1080, max=2048, truncated=48, cached=False, seconds=8.2), ev("step", n=3)]
+                                                           "model.language_model.layers.N.self_attn.q_proj"])]
+        if ckpt != "FP8-DYNAMIC":
+            out.append(ev("step", n=2))
+            if mode == "fail-step2":
+                return out + ["Traceback (most recent call last):", "datasets.exceptions.DatasetNotFoundError: no such dataset"], 1
+            out.append(ev("calib", source="HuggingFaceH4/ultrachat_200k:train_sft", template="chat_template(str)", n=512,
+                          min=199, median=1080, max=2048, truncated=48, cached=False, seconds=8.2))
+        out.append(ev("step", n=3))
         if mode == "no-saved":
             return out, 0
         if mode == "fail-step3":
             return out + self.lines("llmcompressor/w4a16-error-no-cc.log"), 1
         if mode == "killed":
             return out + self.lines("llmcompressor/w4a16-fp32-oom-killed.log")[-50:], 137
-        log = "llmcompressor/w8a8-smoothquant-gptq.log" if ckpt == "INT8-W8A8" else "llmcompressor/w4a16-gptq.log"
-        out += [line for line in self.lines(log) if "(" in line or "|" in line]
+        if ckpt != "FP8-DYNAMIC":
+            log = "llmcompressor/w8a8-smoothquant-gptq.log" if ckpt == "INT8-W8A8" else "llmcompressor/w4a16-gptq.log"
+            out += [line for line in self.lines(log) if "(" in line or "|" in line]
         tmp = self.host(arg(cmd, "--out"))
         tmp.mkdir(parents=True, exist_ok=True)
-        qc = {"INT8-W8A8": W8A8_QC, "NVFP4": NVFP4_QC}.get(ckpt, W4A16_QC)
+        qc = {"INT8-W8A8": W8A8_QC, "NVFP4": NVFP4_QC, "FP8-DYNAMIC": FP8_DYNAMIC_QC}.get(ckpt, W4A16_QC)
         (tmp / "config.json").write_text(json.dumps({"quantization_config": qc}))
         (tmp / "model.safetensors").write_bytes(b"x" * 1000)
         (tmp / "qtool.json").write_text(json.dumps({"signature": json.loads(arg(cmd, "--signature"))}))
